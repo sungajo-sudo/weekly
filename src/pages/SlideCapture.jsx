@@ -271,7 +271,7 @@ export default function SlideCapture() {
                   <span style={{ fontSize:13, fontWeight:700, color:'white' }}>이번 주 업무</span>
                 </div>
                 <div style={{ flex:1, overflowY:'auto', padding:'16px 24px', display:'flex', flexDirection:'column', gap:14 }}>
-                  {thisWeekGrouped.map(([project, tasks], idx) => (
+                  {thisWeekGrouped.map(([project, cats, total], idx) => (
                     <ProjectCard key={project} project={project} cats={cats} total={total} color={PROJECT_COLORS[idx%PROJECT_COLORS.length]}
                       weekKey="prevWeek" onEdit={handleEdit} onDeleteTask={handleDeleteTask} onAddTask={handleAddTask} />
                   ))}
@@ -283,7 +283,7 @@ export default function SlideCapture() {
                   <span style={{ fontSize:13, fontWeight:700, color:'white' }}>다음 주 계획</span>
                 </div>
                 <div style={{ flex:1, overflowY:'auto', padding:'16px 24px', display:'flex', flexDirection:'column', gap:14 }}>
-                  {nextWeekGrouped.map(([project, tasks], idx) => (
+                  {nextWeekGrouped.map(([project, cats, total], idx) => (
                     <ProjectCard key={project} project={project} cats={cats} total={total} color={PROJECT_COLORS[idx%PROJECT_COLORS.length]}
                       weekKey="thisWeek" onEdit={handleEdit} onDeleteTask={handleDeleteTask} onAddTask={handleAddTask} />
                   ))}

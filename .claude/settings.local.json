@@ -21,7 +21,10 @@
       "Bash(curl -s http://localhost:3001/api/weekly -o \"D:\\\\Claude\\\\weekly report\\\\backend\\\\weekly2.json\")",
       "Bash(git add *)",
       "Bash(git commit *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(curl -s \"https://weekly-ten-psi.vercel.app/api/weekly\" -o \"D:\\\\Claude\\\\weekly report\\\\backend\\\\debug3.json\")",
+      "mcp__a8f6c9f8-8da1-4157-9245-e40a3694239a__list_deployments",
+      "mcp__a8f6c9f8-8da1-4157-9245-e40a3694239a__get_deployment_build_logs"
     ]
   }
 }
