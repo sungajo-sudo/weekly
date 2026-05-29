@@ -13,13 +13,14 @@ export function getSheets() {
   return google.sheets({ version: 'v4', auth });
 }
 
-// 항상 가장 왼쪽(첫 번째) 시트 이름 반환
+// 숨겨지지 않은 시트 중 가장 왼쪽(첫 번째 visible) 시트 이름 반환
 export async function getFirstSheetName() {
   const sheets = getSheets();
   const meta = await sheets.spreadsheets.get({
     spreadsheetId: process.env.SPREADSHEET_ID,
   });
-  return meta.data.sheets[0]?.properties?.title || null;
+  const visible = meta.data.sheets.find(s => !s.properties.hidden);
+  return visible?.properties?.title || null;
 }
 
 export async function fetchRows(sheetName) {

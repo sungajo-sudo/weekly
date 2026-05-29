@@ -6,14 +6,16 @@ import { useWeeklyData, triggerSync } from '../hooks/useWeeklyData';
 const SLIDE_W = 1280;
 const SLIDE_H = 720;
 
-// 프로젝트별로 팀원 업무 그룹핑
+// 프로젝트별로 업무 내용 그룹핑 (이번 주 기준, 팀원명 제외)
 function groupByProject(members) {
   const map = {};
   for (const member of members) {
-    for (const task of member.thisWeek) {
+    // 이번 주(prevWeek = 왼쪽 컬럼) 우선, 없으면 다음 주(thisWeek)
+    const tasks = member.prevWeek.length > 0 ? member.prevWeek : member.thisWeek;
+    for (const task of tasks) {
       if (!task.project || !task.content) continue;
       if (!map[task.project]) map[task.project] = [];
-      map[task.project].push({ name: member.name, content: task.content });
+      map[task.project].push(task.content);
     }
   }
   return Object.entries(map).sort((a, b) => b[1].length - a[1].length);
@@ -163,19 +165,19 @@ export default function SlideCapture() {
 
 function ProjectCard({ project, tasks, color }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
       {/* 프로젝트 헤더 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <div style={{ width: 3, height: 16, borderRadius: 2, background: color, flexShrink: 0 }} />
+        <div style={{ width: 3, height: 14, borderRadius: 2, background: color, flexShrink: 0 }} />
         <span style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>{project}</span>
         <span style={{ fontSize: 11, color: '#9ca3af' }}>{tasks.length}건</span>
       </div>
-      {/* 태스크 목록 */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingLeft: 11 }}>
-        {tasks.map((t, i) => (
+      {/* 업무 내용 목록 — 팀원명 없이 내용만 */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, paddingLeft: 11, borderLeft: `2px solid ${color}20` }}>
+        {tasks.map((content, i) => (
           <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
-            <span style={{ fontSize: 11, fontWeight: 600, color: color, flexShrink: 0, minWidth: 36, marginTop: 1 }}>{t.name}</span>
-            <span style={{ fontSize: 11, color: '#374151', lineHeight: 1.5 }}>{t.content}</span>
+            <span style={{ color: color, fontSize: 10, marginTop: 2, flexShrink: 0 }}>•</span>
+            <span style={{ fontSize: 11, color: '#374151', lineHeight: 1.5 }}>{content}</span>
           </div>
         ))}
       </div>
