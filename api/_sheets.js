@@ -13,15 +13,13 @@ export function getSheets() {
   return google.sheets({ version: 'v4', auth });
 }
 
-export async function getSheetNameByGid(gid) {
+// 항상 가장 왼쪽(첫 번째) 시트 이름 반환
+export async function getFirstSheetName() {
   const sheets = getSheets();
   const meta = await sheets.spreadsheets.get({
     spreadsheetId: process.env.SPREADSHEET_ID,
   });
-  const sheet = meta.data.sheets.find(
-    s => String(s.properties.sheetId) === String(gid)
-  );
-  return sheet?.properties?.title || null;
+  return meta.data.sheets[0]?.properties?.title || null;
 }
 
 export async function fetchRows(sheetName) {
@@ -34,9 +32,12 @@ export async function fetchRows(sheetName) {
 }
 
 export function parseWeeklySheet(rawRows) {
-  const dataRows = rawRows
-    .slice(1)
-    .filter(r => r[0]?.trim() !== '팀원' && r[4]?.trim() !== '팀원');
+  // 헤더 행 건너뜀: '팀원' 또는 '이번 주' 등 컬럼 헤더 행 제외
+  const SKIP = ['팀원', '이번 주', '다음 주', '이번주', '다음주'];
+  const dataRows = rawRows.filter(r => {
+    const c0 = r[0]?.trim() || '';
+    return c0 !== '' && !SKIP.some(s => c0.includes(s));
+  });
 
   const memberMap = {};
   for (const row of dataRows) {

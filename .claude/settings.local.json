@@ -18,7 +18,10 @@
       "Bash(curl -s http://localhost:3001/api/weekly -o \"D:\\\\Claude\\\\weekly report\\\\backend\\\\weekly_debug.json\")",
       "Bash(curl -s http://localhost:3001/api/weekly)",
       "Bash(curl -v http://localhost:3001/api/weekly)",
-      "Bash(curl -s http://localhost:3001/api/weekly -o \"D:\\\\Claude\\\\weekly report\\\\backend\\\\weekly2.json\")"
+      "Bash(curl -s http://localhost:3001/api/weekly -o \"D:\\\\Claude\\\\weekly report\\\\backend\\\\weekly2.json\")",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)"
     ]
   }
 }
