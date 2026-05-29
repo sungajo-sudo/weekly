@@ -6,13 +6,11 @@ import { useWeeklyData, triggerSync } from '../hooks/useWeeklyData';
 const SLIDE_W = 1280;
 const SLIDE_H = 720;
 
-// 프로젝트별로 업무 내용 그룹핑 (이번 주 기준, 팀원명 제외)
-function groupByProject(members) {
+// 이번 주 / 다음 주 각각 프로젝트별 그룹핑
+function groupByProject(members, weekKey) {
   const map = {};
   for (const member of members) {
-    // 이번 주(prevWeek = 왼쪽 컬럼) 우선, 없으면 다음 주(thisWeek)
-    const tasks = member.prevWeek.length > 0 ? member.prevWeek : member.thisWeek;
-    for (const task of tasks) {
+    for (const task of member[weekKey] || []) {
       if (!task.project || !task.content) continue;
       if (!map[task.project]) map[task.project] = [];
       map[task.project].push(task.content);
@@ -62,7 +60,8 @@ export default function SlideCapture() {
   const [syncing, setSyncing] = useState(false);
   const { data, loading, error, refetch } = useWeeklyData();
 
-  const grouped = data ? groupByProject(data.members) : [];
+  const thisWeekGrouped = data ? groupByProject(data.members, 'prevWeek') : [];
+  const nextWeekGrouped = data ? groupByProject(data.members, 'thisWeek') : [];
 
   async function handleSync() {
     setSyncing(true);
@@ -86,9 +85,7 @@ export default function SlideCapture() {
     }
   }
 
-  // 컬럼 분배: 프로젝트를 2컬럼으로 나누기
-  const leftProjects = grouped.filter((_, i) => i % 2 === 0);
-  const rightProjects = grouped.filter((_, i) => i % 2 === 1);
+  // 이번 주 / 다음 주 두 컬럼
 
   return (
     <div className="flex flex-col h-full bg-gray-50">
@@ -135,19 +132,29 @@ export default function SlideCapture() {
         )}
         {!loading && !error && data && (
           <ScaledSlide captureRef={captureRef}>
-            {/* 슬라이드 본문 — 헤더 없이 바로 프로젝트 그리드 */}
-            <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, padding: '28px 36px', overflow: 'hidden', background: 'white' }}>
-              {/* 왼쪽 컬럼 */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingRight: 18, borderRight: '1px solid #f3f4f6' }}>
-                {leftProjects.map(([project, tasks], idx) => (
-                  <ProjectCard key={project} project={project} tasks={tasks} color={PROJECT_COLORS[idx * 2 % PROJECT_COLORS.length]} />
-                ))}
+            {/* 슬라이드 본문 — 이번 주 / 다음 주 2컬럼 */}
+            <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, overflow: 'hidden', background: 'white' }}>
+              {/* 이번 주 컬럼 */}
+              <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRight: '1px solid #e5e7eb' }}>
+                <div style={{ padding: '14px 24px 10px', background: '#4f46e5', flexShrink: 0 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'white', letterSpacing: '0.05em' }}>이번 주 업무</span>
+                </div>
+                <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {thisWeekGrouped.map(([project, tasks], idx) => (
+                    <ProjectCard key={project} project={project} tasks={tasks} color={PROJECT_COLORS[idx % PROJECT_COLORS.length]} />
+                  ))}
+                </div>
               </div>
-              {/* 오른쪽 컬럼 */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingLeft: 18 }}>
-                {rightProjects.map(([project, tasks], idx) => (
-                  <ProjectCard key={project} project={project} tasks={tasks} color={PROJECT_COLORS[(idx * 2 + 1) % PROJECT_COLORS.length]} />
-                ))}
+              {/* 다음 주 컬럼 */}
+              <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <div style={{ padding: '14px 24px 10px', background: '#0891b2', flexShrink: 0 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'white', letterSpacing: '0.05em' }}>다음 주 계획</span>
+                </div>
+                <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {nextWeekGrouped.map(([project, tasks], idx) => (
+                    <ProjectCard key={project} project={project} tasks={tasks} color={PROJECT_COLORS[idx % PROJECT_COLORS.length]} />
+                  ))}
+                </div>
               </div>
             </div>
 
