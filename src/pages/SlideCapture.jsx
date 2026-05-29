@@ -1,7 +1,14 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
 import html2canvas from 'html2canvas';
-import { Camera, RefreshCw, Loader, RotateCcw } from 'lucide-react';
+import { Camera, RefreshCw, Loader, RotateCcw, GripVertical } from 'lucide-react';
 import { useWeeklyData, triggerSync } from '../hooks/useWeeklyData';
+import {
+  DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragOverlay,
+} from '@dnd-kit/core';
+import {
+  SortableContext, verticalListSortingStrategy, useSortable, arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 const SLIDE_W = 1280;
 const SLIDE_H = 720;
@@ -110,6 +117,38 @@ function EditableText({ value, onChange, style }) {
   );
 }
 
+// 드래그 핸들이 있는 Sortable 래퍼
+function SortableProjectCard(props) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.project });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.4 : 1,
+        position: 'relative',
+      }}
+    >
+      {/* 드래그 핸들 */}
+      <div
+        {...attributes}
+        {...listeners}
+        style={{
+          position: 'absolute', top: 2, right: 0,
+          cursor: 'grab', color: '#d1d5db', padding: '2px 4px', zIndex: 10,
+          touchAction: 'none',
+        }}
+        onMouseEnter={e => e.currentTarget.style.color = '#6366f1'}
+        onMouseLeave={e => e.currentTarget.style.color = '#d1d5db'}
+      >
+        <GripVertical size={14} />
+      </div>
+      <ProjectCard {...props} />
+    </div>
+  );
+}
+
 // 프로젝트 > 카테고리 > 업무내용
 function ProjectCard({ project, cats, total, color, weekKey, onEdit, onDeleteTask, onAddTask }) {
   return (
@@ -184,6 +223,34 @@ export default function SlideCapture() {
 
   const thisWeekGrouped = applyEdits(baseThis, 'prevWeek');
   const nextWeekGrouped = applyEdits(baseNext, 'thisWeek');
+
+  // 드래그 순서 상태 (프로젝트명 배열)
+  const [thisOrder, setThisOrder] = useState(null);
+  const [nextOrder, setNextOrder] = useState(null);
+
+  // 데이터 변경 시 순서 초기화
+  useEffect(() => { setThisOrder(null); setNextOrder(null); }, [data]);
+
+  const orderedThis = thisOrder
+    ? [...thisWeekGrouped].sort((a, b) => thisOrder.indexOf(a[0]) - thisOrder.indexOf(b[0]))
+    : thisWeekGrouped;
+  const orderedNext = nextOrder
+    ? [...nextWeekGrouped].sort((a, b) => nextOrder.indexOf(a[0]) - nextOrder.indexOf(b[0]))
+    : nextWeekGrouped;
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  function handleDragEnd(weekKey, event) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const grouped = weekKey === 'prevWeek' ? orderedThis : orderedNext;
+    const ids = grouped.map(([p]) => p);
+    const oldIdx = ids.indexOf(active.id);
+    const newIdx = ids.indexOf(over.id);
+    const newOrder = arrayMove(ids, oldIdx, newIdx);
+    if (weekKey === 'prevWeek') setThisOrder(newOrder);
+    else setNextOrder(newOrder);
+  }
 
   const getTaskList = useCallback((weekKey, project, category) => {
     const key = `${project}__${category}`;
@@ -270,24 +337,34 @@ export default function SlideCapture() {
                 <div style={{ padding:'14px 24px 10px', background:'#4f46e5', flexShrink:0 }}>
                   <span style={{ fontSize:13, fontWeight:700, color:'white' }}>이번 주 업무</span>
                 </div>
-                <div style={{ flex:1, overflowY:'auto', padding:'16px 24px', display:'flex', flexDirection:'column', gap:14 }}>
-                  {thisWeekGrouped.map(([project, cats, total], idx) => (
-                    <ProjectCard key={project} project={project} cats={cats} total={total} color={PROJECT_COLORS[idx%PROJECT_COLORS.length]}
-                      weekKey="prevWeek" onEdit={handleEdit} onDeleteTask={handleDeleteTask} onAddTask={handleAddTask} />
-                  ))}
-                </div>
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={e => handleDragEnd('prevWeek', e)}>
+                  <SortableContext items={orderedThis.map(([p]) => p)} strategy={verticalListSortingStrategy}>
+                    <div style={{ flex:1, overflowY:'auto', padding:'16px 24px', display:'flex', flexDirection:'column', gap:14 }}>
+                      {orderedThis.map(([project, cats, total], idx) => (
+                        <SortableProjectCard key={project} project={project} cats={cats} total={total}
+                          color={PROJECT_COLORS[idx%PROJECT_COLORS.length]}
+                          weekKey="prevWeek" onEdit={handleEdit} onDeleteTask={handleDeleteTask} onAddTask={handleAddTask} />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
               </div>
               {/* 다음 주 */}
               <div style={{ display:'flex', flexDirection:'column', overflow:'hidden' }}>
                 <div style={{ padding:'14px 24px 10px', background:'#0891b2', flexShrink:0 }}>
                   <span style={{ fontSize:13, fontWeight:700, color:'white' }}>다음 주 계획</span>
                 </div>
-                <div style={{ flex:1, overflowY:'auto', padding:'16px 24px', display:'flex', flexDirection:'column', gap:14 }}>
-                  {nextWeekGrouped.map(([project, cats, total], idx) => (
-                    <ProjectCard key={project} project={project} cats={cats} total={total} color={PROJECT_COLORS[idx%PROJECT_COLORS.length]}
-                      weekKey="thisWeek" onEdit={handleEdit} onDeleteTask={handleDeleteTask} onAddTask={handleAddTask} />
-                  ))}
-                </div>
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={e => handleDragEnd('thisWeek', e)}>
+                  <SortableContext items={orderedNext.map(([p]) => p)} strategy={verticalListSortingStrategy}>
+                    <div style={{ flex:1, overflowY:'auto', padding:'16px 24px', display:'flex', flexDirection:'column', gap:14 }}>
+                      {orderedNext.map(([project, cats, total], idx) => (
+                        <SortableProjectCard key={project} project={project} cats={cats} total={total}
+                          color={PROJECT_COLORS[idx%PROJECT_COLORS.length]}
+                          weekKey="thisWeek" onEdit={handleEdit} onDeleteTask={handleDeleteTask} onAddTask={handleAddTask} />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
               </div>
             </div>
             <div style={{ padding:'8px 36px', background:'#f9fafb', borderTop:'1px solid #f3f4f6', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
