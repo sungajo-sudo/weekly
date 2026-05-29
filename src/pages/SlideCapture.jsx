@@ -282,11 +282,23 @@ export default function SlideCapture() {
   const baseThis = data ? groupByProjectCategory(data.members, 'prevWeek') : [];
   const baseNext = data ? groupByProjectCategory(data.members, 'thisWeek') : [];
 
-  // 시트 로드 시 localStorage에서 전체 상태 복원
+  // 시트 변경 시 UI 리셋 후 localStorage 복원 (단일 effect)
   useEffect(() => {
     if (!data?.sheetName) return;
+
+    // 항상 먼저 리셋
+    setOpenThis(null);
+    setOpenNext(null);
+    setEdits({});
+    setDeleted({ prevWeek: new Set(), thisWeek: new Set() });
+    setThisOrder(null);
+    setNextOrder(null);
+    setCatOrders({});
+
+    // 이후 localStorage에서 복원
     try {
       const key = data.sheetName;
+
       const editsStr = localStorage.getItem(`weekly-edits-${key}`);
       if (editsStr) setEdits(JSON.parse(editsStr));
 
@@ -299,14 +311,12 @@ export default function SlideCapture() {
       const orderStr = localStorage.getItem(`weekly-order-${key}`);
       if (orderStr) {
         const o = JSON.parse(orderStr);
-        if (o.thisOrder) setThisOrder(o.thisOrder);
-        if (o.nextOrder) setNextOrder(o.nextOrder);
-        if (o.catOrders) setCatOrders(o.catOrders);
+        if (o.thisOrder)  setThisOrder(o.thisOrder);
+        if (o.nextOrder)  setNextOrder(o.nextOrder);
+        if (o.catOrders)  setCatOrders(o.catOrders);
       }
     } catch(e) {}
   }, [data?.sheetName]);
-
-  useEffect(() => { setThisOrder(null); setNextOrder(null); setOpenThis(null); setOpenNext(null); }, [data]);
 
   // 모든 편집 상태 localStorage 저장
   function saveEdits() {
