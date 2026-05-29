@@ -6,16 +6,27 @@ import { useWeeklyData, triggerSync } from '../hooks/useWeeklyData';
 const SLIDE_W = 1280;
 const SLIDE_H = 720;
 
-function groupByProject(members, weekKey) {
+// 프로젝트 > 카테고리 > [업무내용] 구조로 그룹핑
+function groupByProjectCategory(members, weekKey) {
+  // { 프로젝트: { 카테고리: [content, ...] } }
   const map = {};
   for (const member of members) {
     for (const task of member[weekKey] || []) {
       if (!task.project || !task.content) continue;
-      if (!map[task.project]) map[task.project] = [];
-      map[task.project].push(task.content);
+      const proj = task.project;
+      const cat = task.category || '기타';
+      if (!map[proj]) map[proj] = {};
+      if (!map[proj][cat]) map[proj][cat] = [];
+      map[proj][cat].push(task.content);
     }
   }
-  return Object.entries(map).sort((a, b) => b[1].length - a[1].length);
+  // 건수 많은 순 정렬
+  return Object.entries(map)
+    .map(([proj, cats]) => {
+      const total = Object.values(cats).flat().length;
+      return [proj, cats, total];
+    })
+    .sort((a, b) => b[2] - a[2]);
 }
 
 const PROJECT_COLORS = [
@@ -99,39 +110,47 @@ function EditableText({ value, onChange, style }) {
   );
 }
 
-function ProjectCard({ project, tasks, color, weekKey, projectIdx, onEdit, onDeleteTask, onAddTask }) {
+// 프로젝트 > 카테고리 > 업무내용
+function ProjectCard({ project, cats, total, color, weekKey, onEdit, onDeleteTask, onAddTask }) {
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+    <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+      {/* 프로젝트 헤더 */}
       <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-        <div style={{ width:3, height:14, borderRadius:2, background:color, flexShrink:0 }} />
+        <div style={{ width:3, height:15, borderRadius:2, background:color, flexShrink:0 }} />
         <span style={{ fontSize:13, fontWeight:700, color:'#111827' }}>{project}</span>
-        <span style={{ fontSize:11, color:'#9ca3af' }}>{tasks.length}건</span>
+        <span style={{ fontSize:11, color:'#9ca3af' }}>{total}건</span>
       </div>
-      <div style={{ display:'flex', flexDirection:'column', gap:3, paddingLeft:11, borderLeft:`2px solid ${color}30` }}>
-        {tasks.map((content, taskIdx) => (
-          <div key={taskIdx} style={{ display:'flex', gap:4, alignItems:'flex-start' }}>
-            <span style={{ color:color, fontSize:10, marginTop:3, flexShrink:0 }}>•</span>
-            <EditableText
-              value={content}
-              onChange={val => onEdit(weekKey, project, taskIdx, val)}
-              style={{ fontSize:11, color:'#374151', lineHeight:1.5, flex:1 }}
-            />
-            <span
-              onClick={() => onDeleteTask(weekKey, project, taskIdx)}
-              title="삭제"
-              style={{ fontSize:10, color:'#d1d5db', cursor:'pointer', flexShrink:0, marginTop:2, padding:'0 2px' }}
-              onMouseEnter={e=>e.currentTarget.style.color='#ef4444'}
-              onMouseLeave={e=>e.currentTarget.style.color='#d1d5db'}
-            >✕</span>
+      {/* 카테고리별 그룹 */}
+      <div style={{ display:'flex', flexDirection:'column', gap:8, paddingLeft:11 }}>
+        {Object.entries(cats).map(([cat, tasks]) => (
+          <div key={cat}>
+            {/* 카테고리 레이블 */}
+            <div style={{ display:'inline-flex', alignItems:'center', background:`${color}18`, borderRadius:4, padding:'1px 7px', marginBottom:4 }}>
+              <span style={{ fontSize:10, fontWeight:600, color:color }}>{cat}</span>
+            </div>
+            {/* 업무 목록 */}
+            <div style={{ display:'flex', flexDirection:'column', gap:2, paddingLeft:4, borderLeft:`2px solid ${color}25` }}>
+              {tasks.map((content, taskIdx) => (
+                <div key={taskIdx} style={{ display:'flex', gap:4, alignItems:'flex-start' }}>
+                  <span style={{ color:color, fontSize:10, marginTop:3, flexShrink:0 }}>•</span>
+                  <EditableText
+                    value={content}
+                    onChange={val => onEdit(weekKey, project, cat, taskIdx, val)}
+                    style={{ fontSize:11, color:'#374151', lineHeight:1.5, flex:1 }}
+                  />
+                  <span onClick={() => onDeleteTask(weekKey, project, cat, taskIdx)}
+                    style={{ fontSize:10, color:'#d1d5db', cursor:'pointer', flexShrink:0, marginTop:2 }}
+                    onMouseEnter={e=>e.currentTarget.style.color='#ef4444'}
+                    onMouseLeave={e=>e.currentTarget.style.color='#d1d5db'}>✕</span>
+                </div>
+              ))}
+              <div onClick={() => onAddTask(weekKey, project, cat)}
+                style={{ fontSize:10, color:'#d1d5db', cursor:'pointer', paddingLeft:2 }}
+                onMouseEnter={e=>e.currentTarget.style.color=color}
+                onMouseLeave={e=>e.currentTarget.style.color='#d1d5db'}>+ 추가</div>
+            </div>
           </div>
         ))}
-        {/* 항목 추가 버튼 */}
-        <div
-          onClick={() => onAddTask(weekKey, project)}
-          style={{ fontSize:10, color:'#c7d2fe', cursor:'pointer', paddingLeft:2, marginTop:2 }}
-          onMouseEnter={e=>e.currentTarget.style.color='#6366f1'}
-          onMouseLeave={e=>e.currentTarget.style.color='#c7d2fe'}
-        >+ 항목 추가</div>
       </div>
     </div>
   );
@@ -147,46 +166,55 @@ export default function SlideCapture() {
   const [edits, setEdits] = useState({});
 
   // 시트 동기화 시 편집 초기화
-  const baseThis = data ? groupByProject(data.members, 'prevWeek') : [];
-  const baseNext = data ? groupByProject(data.members, 'thisWeek') : [];
+  const baseThis = data ? groupByProjectCategory(data.members, 'prevWeek') : [];
+  const baseNext = data ? groupByProjectCategory(data.members, 'thisWeek') : [];
 
-  // 편집 오버레이 적용
+  // 편집 오버레이 적용 (카테고리 구조 유지)
   function applyEdits(base, weekKey) {
-    return base.map(([project, tasks]) => {
-      const overrides = edits[weekKey]?.[project];
-      return [project, overrides !== undefined ? overrides : tasks];
-    }).filter(([, tasks]) => tasks.length > 0);
+    return base.map(([proj, cats, total]) => {
+      const editedCats = {};
+      for (const [cat, tasks] of Object.entries(cats)) {
+        const key = `${proj}__${cat}`;
+        editedCats[cat] = edits[weekKey]?.[key] ?? tasks;
+      }
+      const newTotal = Object.values(editedCats).flat().length;
+      return [proj, editedCats, newTotal];
+    }).filter(([, , t]) => t > 0);
   }
 
   const thisWeekGrouped = applyEdits(baseThis, 'prevWeek');
   const nextWeekGrouped = applyEdits(baseNext, 'thisWeek');
 
-  const handleEdit = useCallback((weekKey, project, taskIdx, newVal) => {
-    setEdits(prev => {
-      const base = weekKey === 'prevWeek' ? baseThis : baseNext;
-      const current = prev[weekKey]?.[project] ?? base.find(([p]) => p === project)?.[1] ?? [];
-      const updated = [...current];
-      updated[taskIdx] = newVal;
-      return { ...prev, [weekKey]: { ...prev[weekKey], [project]: updated } };
-    });
-  }, [baseThis, baseNext]);
+  const getTaskList = useCallback((weekKey, project, category) => {
+    const key = `${project}__${category}`;
+    const base = weekKey === 'prevWeek' ? baseThis : baseNext;
+    return edits[weekKey]?.[key] ?? base.find(([p]) => p === project)?.[1]?.[category] ?? [];
+  }, [baseThis, baseNext, edits]);
 
-  const handleDeleteTask = useCallback((weekKey, project, taskIdx) => {
+  const handleEdit = useCallback((weekKey, project, category, taskIdx, newVal) => {
+    const key = `${project}__${category}`;
     setEdits(prev => {
-      const base = weekKey === 'prevWeek' ? baseThis : baseNext;
-      const current = prev[weekKey]?.[project] ?? base.find(([p]) => p === project)?.[1] ?? [];
-      const updated = current.filter((_, i) => i !== taskIdx);
-      return { ...prev, [weekKey]: { ...prev[weekKey], [project]: updated } };
+      const current = getTaskList(weekKey, project, category);
+      const updated = [...current]; updated[taskIdx] = newVal;
+      return { ...prev, [weekKey]: { ...prev[weekKey], [key]: updated } };
     });
-  }, [baseThis, baseNext]);
+  }, [getTaskList]);
 
-  const handleAddTask = useCallback((weekKey, project) => {
+  const handleDeleteTask = useCallback((weekKey, project, category, taskIdx) => {
+    const key = `${project}__${category}`;
     setEdits(prev => {
-      const base = weekKey === 'prevWeek' ? baseThis : baseNext;
-      const current = prev[weekKey]?.[project] ?? base.find(([p]) => p === project)?.[1] ?? [];
-      return { ...prev, [weekKey]: { ...prev[weekKey], [project]: [...current, ''] } };
+      const current = getTaskList(weekKey, project, category);
+      return { ...prev, [weekKey]: { ...prev[weekKey], [key]: current.filter((_, i) => i !== taskIdx) } };
     });
-  }, [baseThis, baseNext]);
+  }, [getTaskList]);
+
+  const handleAddTask = useCallback((weekKey, project, category) => {
+    const key = `${project}__${category}`;
+    setEdits(prev => {
+      const current = getTaskList(weekKey, project, category);
+      return { ...prev, [weekKey]: { ...prev[weekKey], [key]: [...current, ''] } };
+    });
+  }, [getTaskList]);
 
   async function handleSync() {
     setSyncing(true);
@@ -244,8 +272,8 @@ export default function SlideCapture() {
                 </div>
                 <div style={{ flex:1, overflowY:'auto', padding:'16px 24px', display:'flex', flexDirection:'column', gap:14 }}>
                   {thisWeekGrouped.map(([project, tasks], idx) => (
-                    <ProjectCard key={project} project={project} tasks={tasks} color={PROJECT_COLORS[idx%PROJECT_COLORS.length]}
-                      weekKey="prevWeek" projectIdx={idx} onEdit={handleEdit} onDeleteTask={handleDeleteTask} onAddTask={handleAddTask} />
+                    <ProjectCard key={project} project={project} cats={cats} total={total} color={PROJECT_COLORS[idx%PROJECT_COLORS.length]}
+                      weekKey="prevWeek" onEdit={handleEdit} onDeleteTask={handleDeleteTask} onAddTask={handleAddTask} />
                   ))}
                 </div>
               </div>
@@ -256,8 +284,8 @@ export default function SlideCapture() {
                 </div>
                 <div style={{ flex:1, overflowY:'auto', padding:'16px 24px', display:'flex', flexDirection:'column', gap:14 }}>
                   {nextWeekGrouped.map(([project, tasks], idx) => (
-                    <ProjectCard key={project} project={project} tasks={tasks} color={PROJECT_COLORS[idx%PROJECT_COLORS.length]}
-                      weekKey="thisWeek" projectIdx={idx} onEdit={handleEdit} onDeleteTask={handleDeleteTask} onAddTask={handleAddTask} />
+                    <ProjectCard key={project} project={project} cats={cats} total={total} color={PROJECT_COLORS[idx%PROJECT_COLORS.length]}
+                      weekKey="thisWeek" onEdit={handleEdit} onDeleteTask={handleDeleteTask} onAddTask={handleAddTask} />
                   ))}
                 </div>
               </div>

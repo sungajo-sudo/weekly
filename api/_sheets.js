@@ -27,7 +27,7 @@ export async function fetchRows(sheetName) {
   const sheets = getSheets();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: process.env.SPREADSHEET_ID,
-    range: `${sheetName}!A:G`,
+    range: `${sheetName}!A:I`,  // 카테고리 컬럼 추가로 I열까지
   });
   return res.data.values || [];
 }
@@ -42,7 +42,8 @@ export function parseWeeklySheet(rawRows) {
 
   const memberMap = {};
   for (const row of dataRows) {
-    const [prevName, prevProject, prevContent, , thisName, thisProject, thisContent] = row;
+    // A:팀원 B:프로젝트 C:카테고리 D:업무내용 E:구분 F:팀원 G:프로젝트 H:카테고리 I:업무내용
+    const [prevName, prevProject, prevCategory, prevContent, , thisName, thisProject, thisCategory, thisContent] = row;
 
     if (prevName?.trim()) {
       const name = prevName.trim();
@@ -50,6 +51,7 @@ export function parseWeeklySheet(rawRows) {
       if (prevProject?.trim() || prevContent?.trim()) {
         memberMap[name].prevWeek.push({
           project: prevProject?.trim() || '',
+          category: prevCategory?.trim() || '',
           content: prevContent?.trim() || '',
         });
       }
@@ -60,6 +62,7 @@ export function parseWeeklySheet(rawRows) {
       if (thisProject?.trim() || thisContent?.trim()) {
         memberMap[name].thisWeek.push({
           project: thisProject?.trim() || '',
+          category: thisCategory?.trim() || '',
           content: thisContent?.trim() || '',
         });
       }
