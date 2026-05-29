@@ -2,10 +2,22 @@ import { useRef, useState, useEffect } from 'react';
 import html2canvas from 'html2canvas';
 import { Camera, RefreshCw, Loader } from 'lucide-react';
 import { useWeeklyData, triggerSync } from '../hooks/useWeeklyData';
-import { PROJECTS } from '../data/mockData';
 
 const SLIDE_W = 1280;
 const SLIDE_H = 720;
+
+// 프로젝트별로 팀원 업무 그룹핑
+function groupByProject(members) {
+  const map = {};
+  for (const member of members) {
+    for (const task of member.thisWeek) {
+      if (!task.project || !task.content) continue;
+      if (!map[task.project]) map[task.project] = [];
+      map[task.project].push({ name: member.name, content: task.content });
+    }
+  }
+  return Object.entries(map).sort((a, b) => b[1].length - a[1].length);
+}
 
 function ScaledSlide({ captureRef, children }) {
   const containerRef = useRef(null);
@@ -37,14 +49,10 @@ function ScaledSlide({ captureRef, children }) {
   );
 }
 
-function SlideCard({ title, bg, border, titleColor = '#6b7280', children }) {
-  return (
-    <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 10, padding: '14px 18px', flex: 1, overflow: 'hidden' }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: titleColor, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>{title}</div>
-      {children}
-    </div>
-  );
-}
+const PROJECT_COLORS = [
+  '#4f46e5','#0891b2','#16a34a','#d97706','#dc2626',
+  '#7c3aed','#0f766e','#b45309','#be123c','#1d4ed8',
+];
 
 export default function SlideCapture() {
   const captureRef = useRef(null);
@@ -52,16 +60,7 @@ export default function SlideCapture() {
   const [syncing, setSyncing] = useState(false);
   const { data, loading, error, refetch } = useWeeklyData();
 
-  // Derive highlights: top task per member from thisWeek
-  const highlights = (data?.members || [])
-    .filter(m => m.thisWeek.length > 0)
-    .slice(0, 5)
-    .map(m => `${m.name} — ${m.thisWeek[0].project}: ${m.thisWeek[0].content}`);
-
-  // Collect unique projects from real data
-  const realProjects = [...new Set(
-    (data?.members || []).flatMap(m => [...m.prevWeek, ...m.thisWeek].map(t => t.project))
-  )].filter(Boolean).slice(0, 6);
+  const grouped = data ? groupByProject(data.members) : [];
 
   async function handleSync() {
     setSyncing(true);
@@ -77,7 +76,7 @@ export default function SlideCapture() {
         width: SLIDE_W, height: SLIDE_H,
       });
       const link = document.createElement('a');
-      link.download = `weekly_dashboard_${data?.sheetName || 'report'}.png`;
+      link.download = `weekly_${data?.sheetName || 'report'}.png`;
       link.href = canvas.toDataURL('image/png');
       link.click();
     } finally {
@@ -85,12 +84,16 @@ export default function SlideCapture() {
     }
   }
 
+  // 컬럼 분배: 프로젝트를 2컬럼으로 나누기
+  const leftProjects = grouped.filter((_, i) => i % 2 === 0);
+  const rightProjects = grouped.filter((_, i) => i % 2 === 1);
+
   return (
     <div className="flex flex-col h-full bg-gray-50">
       {/* Toolbar */}
       <div className="flex items-center justify-between px-6 py-3 bg-white border-b border-gray-200 shrink-0">
         <div className="flex items-center gap-3">
-          <h1 className="text-base font-bold text-gray-800">주간 보고 룸</h1>
+          <h1 className="text-base font-bold text-gray-800">슬라이드 캡처 룸</h1>
           {data && (
             <span className="text-sm text-gray-500 bg-gray-100 px-2.5 py-1 rounded-md font-medium">
               {data.sheetName}주차 · {data.members?.length}명
@@ -115,7 +118,7 @@ export default function SlideCapture() {
         </button>
       </div>
 
-      {/* Canvas area */}
+      {/* Canvas */}
       <div className="flex-1 flex items-center justify-center p-6 overflow-hidden">
         {loading && (
           <div className="flex flex-col items-center gap-3 text-gray-400">
@@ -125,72 +128,56 @@ export default function SlideCapture() {
         )}
         {error && !loading && (
           <div className="text-red-500 text-sm bg-red-50 px-4 py-3 rounded-lg border border-red-200">
-            연결 오류: {error} — 백엔드 서버(port 3001)가 실행 중인지 확인하세요.
+            연결 오류: {error}
           </div>
         )}
         {!loading && !error && data && (
           <ScaledSlide captureRef={captureRef}>
-            {/* Header */}
-            <div style={{ padding: '28px 48px 18px', background: 'linear-gradient(to right, #3730a3, #4f46e5)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-              <div>
-                <div style={{ color: 'white', fontSize: 28, fontWeight: 900, letterSpacing: '-0.5px' }}>Weekly Team Dashboard</div>
-                <div style={{ color: '#c7d2fe', fontSize: 14, marginTop: 4 }}>{data.sheetName}주차 보고</div>
+            {/* 슬라이드 본문 — 헤더 없이 바로 프로젝트 그리드 */}
+            <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, padding: '28px 36px', overflow: 'hidden', background: 'white' }}>
+              {/* 왼쪽 컬럼 */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingRight: 18, borderRight: '1px solid #f3f4f6' }}>
+                {leftProjects.map(([project, tasks], idx) => (
+                  <ProjectCard key={project} project={project} tasks={tasks} color={PROJECT_COLORS[idx * 2 % PROJECT_COLORS.length]} />
+                ))}
               </div>
-              <div style={{ color: 'white', fontSize: 11, opacity: 0.6, fontWeight: 600, letterSpacing: 2 }}>WEEKLY REPORT</div>
-            </div>
-
-            {/* Body */}
-            <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, padding: '20px 48px', minHeight: 0 }}>
-              {/* Left */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <SlideCard title="참여 프로젝트" bg="#f8fafc" border="#e2e8f0">
-                  {realProjects.map((p, i) => {
-                    const colors = ['#0052cc','#6554c0','#ff5630','#00875a','#ff991f','#00b8d9'];
-                    return (
-                      <div key={p} style={{ marginBottom: 10 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                          <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{p}</span>
-                        </div>
-                        <div style={{ height: 8, background: '#e5e7eb', borderRadius: 9999, overflow: 'hidden' }}>
-                          <div style={{ height: '100%', width: `${60 + (i * 7) % 35}%`, background: colors[i % colors.length], borderRadius: 9999 }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </SlideCard>
-
-                <SlideCard title="팀원 현황" bg="#f0fdf4" border="#bbf7d0" titleColor="#15803d">
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {data.members.map(m => (
-                      <div key={m.name} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'white', border: '1px solid #e5e7eb', borderRadius: 6, padding: '3px 8px' }}>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>{m.name}</span>
-                        <span style={{ fontSize: 11, color: '#9ca3af' }}>{m.thisWeek.length}건</span>
-                      </div>
-                    ))}
-                  </div>
-                </SlideCard>
-              </div>
-
-              {/* Right */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <SlideCard title="이번 주 주요 업무" bg="#eef2ff" border="#c7d2fe" titleColor="#4f46e5">
-                  {highlights.map((h, i) => (
-                    <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 7 }}>
-                      <span style={{ color: '#818cf8', fontSize: 13, flexShrink: 0 }}>—</span>
-                      <p style={{ fontSize: 12, color: '#374151', margin: 0, lineHeight: 1.6 }}>{h}</p>
-                    </div>
-                  ))}
-                </SlideCard>
+              {/* 오른쪽 컬럼 */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingLeft: 18 }}>
+                {rightProjects.map(([project, tasks], idx) => (
+                  <ProjectCard key={project} project={project} tasks={tasks} color={PROJECT_COLORS[(idx * 2 + 1) % PROJECT_COLORS.length]} />
+                ))}
               </div>
             </div>
 
             {/* Footer */}
-            <div style={{ padding: '10px 48px', background: '#f9fafb', borderTop: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-              <span style={{ fontSize: 11, color: '#9ca3af' }}>Weekly Team Dashboard • {data.sheetName}주차 • {new Date(data.lastSync).toLocaleDateString('ko-KR')} 동기화</span>
-              <span style={{ fontSize: 11, color: '#9ca3af' }}>총 {data.members.length}명</span>
+            <div style={{ padding: '8px 36px', background: '#f9fafb', borderTop: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+              <span style={{ fontSize: 11, color: '#9ca3af' }}>{data.sheetName}주차 주간 업무 보고</span>
+              <span style={{ fontSize: 11, color: '#9ca3af' }}>{new Date(data.lastSync).toLocaleDateString('ko-KR')} 기준</span>
             </div>
           </ScaledSlide>
         )}
+      </div>
+    </div>
+  );
+}
+
+function ProjectCard({ project, tasks, color }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {/* 프로젝트 헤더 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ width: 3, height: 16, borderRadius: 2, background: color, flexShrink: 0 }} />
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>{project}</span>
+        <span style={{ fontSize: 11, color: '#9ca3af' }}>{tasks.length}건</span>
+      </div>
+      {/* 태스크 목록 */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingLeft: 11 }}>
+        {tasks.map((t, i) => (
+          <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: color, flexShrink: 0, minWidth: 36, marginTop: 1 }}>{t.name}</span>
+            <span style={{ fontSize: 11, color: '#374151', lineHeight: 1.5 }}>{t.content}</span>
+          </div>
+        ))}
       </div>
     </div>
   );
