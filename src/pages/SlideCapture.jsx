@@ -282,28 +282,42 @@ export default function SlideCapture() {
   const baseThis = data ? groupByProjectCategory(data.members, 'prevWeek') : [];
   const baseNext = data ? groupByProjectCategory(data.members, 'thisWeek') : [];
 
-  // 시트 로드 시 localStorage에서 편집·삭제 복원
+  // 시트 로드 시 localStorage에서 전체 상태 복원
   useEffect(() => {
     if (!data?.sheetName) return;
     try {
-      const stored = localStorage.getItem(`weekly-edits-${data.sheetName}`);
-      if (stored) setEdits(JSON.parse(stored));
-      const del = localStorage.getItem(`weekly-deleted-${data.sheetName}`);
-      if (del) {
-        const p = JSON.parse(del);
+      const key = data.sheetName;
+      const editsStr = localStorage.getItem(`weekly-edits-${key}`);
+      if (editsStr) setEdits(JSON.parse(editsStr));
+
+      const delStr = localStorage.getItem(`weekly-deleted-${key}`);
+      if (delStr) {
+        const p = JSON.parse(delStr);
         setDeleted({ prevWeek: new Set(p.prevWeek || []), thisWeek: new Set(p.thisWeek || []) });
+      }
+
+      const orderStr = localStorage.getItem(`weekly-order-${key}`);
+      if (orderStr) {
+        const o = JSON.parse(orderStr);
+        if (o.thisOrder) setThisOrder(o.thisOrder);
+        if (o.nextOrder) setNextOrder(o.nextOrder);
+        if (o.catOrders) setCatOrders(o.catOrders);
       }
     } catch(e) {}
   }, [data?.sheetName]);
 
   useEffect(() => { setThisOrder(null); setNextOrder(null); setOpenThis(null); setOpenNext(null); }, [data]);
 
-  // 편집 내용 localStorage 저장
+  // 모든 편집 상태 localStorage 저장
   function saveEdits() {
     if (!data?.sheetName) return;
-    localStorage.setItem(`weekly-edits-${data.sheetName}`, JSON.stringify(edits));
-    localStorage.setItem(`weekly-deleted-${data.sheetName}`, JSON.stringify({
+    const key = data.sheetName;
+    localStorage.setItem(`weekly-edits-${key}`, JSON.stringify(edits));
+    localStorage.setItem(`weekly-deleted-${key}`, JSON.stringify({
       prevWeek: [...deleted.prevWeek], thisWeek: [...deleted.thisWeek],
+    }));
+    localStorage.setItem(`weekly-order-${key}`, JSON.stringify({
+      thisOrder, nextOrder, catOrders,
     }));
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -312,9 +326,14 @@ export default function SlideCapture() {
   function clearEdits() {
     setEdits({});
     setDeleted({ prevWeek: new Set(), thisWeek: new Set() });
+    setThisOrder(null);
+    setNextOrder(null);
+    setCatOrders({});
     if (data?.sheetName) {
-      localStorage.removeItem(`weekly-edits-${data.sheetName}`);
-      localStorage.removeItem(`weekly-deleted-${data.sheetName}`);
+      const key = data.sheetName;
+      localStorage.removeItem(`weekly-edits-${key}`);
+      localStorage.removeItem(`weekly-deleted-${key}`);
+      localStorage.removeItem(`weekly-order-${key}`);
     }
   }
 
