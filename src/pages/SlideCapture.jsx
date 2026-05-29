@@ -214,8 +214,8 @@ function SortableProjectAccordion({ project, cats, total, color, isOpen, onToggl
   return (
     <div ref={setNodeRef}
       style={{ transform:CSS.Transform.toString(transform), transition, opacity:isDragging?0.4:1,
-        border:`1px solid ${isOpen ? color+'60' : '#e5e7eb'}`, borderRadius:8, overflow:'hidden',
-        background: isOpen ? `${color}06` : 'white', transition:'all 0.2s' }}>
+        border:`1px solid ${isOpen ? color+'60' : '#e5e7eb'}`, borderRadius:8,
+        background: isOpen ? `${color}06` : 'white', transition:'border-color 0.2s, background 0.2s' }}>
 
       {/* 아코디언 헤더 */}
       <div onClick={onToggle}
@@ -237,7 +237,7 @@ function SortableProjectAccordion({ project, cats, total, color, isOpen, onToggl
       </div>
 
       {/* 아코디언 콘텐츠 */}
-      <div style={{ maxHeight: isOpen ? 800 : 0, overflow:'hidden', transition:'max-height 0.3s ease' }}>
+      <div style={{ maxHeight: isOpen ? 3000 : 0, overflow:'hidden', transition:'max-height 0.35s ease' }}>
         <div style={{ padding:'10px 14px 12px', borderTop:`1px solid ${color}20` }}>
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleCatDragEnd}>
             <SortableContext items={orderedCats.map(([c])=>c)} strategy={verticalListSortingStrategy}>
@@ -387,13 +387,13 @@ export default function SlideCapture() {
   /* ─── 컬럼 렌더 헬퍼 ─── */
   function renderColumn({ grouped, order, weekKey, headerLabel, headerBg, openProject, setOpen }) {
     return (
-      <div style={{ display:'flex', flexDirection:'column', overflow:'hidden', borderRight: weekKey==='prevWeek' ? '1px solid #e5e7eb' : 'none' }}>
+      <div style={{ display:'flex', flexDirection:'column', minHeight:0, borderRight: weekKey==='prevWeek' ? '1px solid #e5e7eb' : 'none' }}>
         <div style={{ padding:'14px 24px 10px', background:headerBg, flexShrink:0 }}>
           <span style={{ fontSize:13, fontWeight:700, color:'white' }}>{headerLabel}</span>
         </div>
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={e=>handleProjectDragEnd(weekKey,e)}>
           <SortableContext items={grouped.map(([p])=>p)} strategy={verticalListSortingStrategy}>
-            <div style={{ flex:1, overflowY:'auto', padding:'12px 16px', display:'flex', flexDirection:'column', gap:6 }}>
+            <div style={{ flex:1, minHeight:0, overflowY:'auto', padding:'12px 16px', display:'flex', flexDirection:'column', gap:6 }}>
               {grouped.map(([project, cats, total], idx) => (
                 <SortableProjectAccordion
                   key={project}
@@ -452,7 +452,7 @@ export default function SlideCapture() {
         {error && !loading && <div className="text-red-500 text-sm bg-red-50 px-4 py-3 rounded-lg border border-red-200">연결 오류: {error}</div>}
         {!loading && !error && data && (
           <ScaledSlide captureRef={captureRef}>
-            <div style={{ flex:1, display:'grid', gridTemplateColumns:'1fr 1fr', overflow:'hidden', background:'white' }}>
+            <div style={{ flex:1, minHeight:0, display:'grid', gridTemplateColumns:'1fr 1fr', overflow:'hidden', background:'white' }}>
               {renderColumn({ grouped:orderedThis, weekKey:'prevWeek', headerLabel:'지난 주 진행', headerBg:'#4f46e5', openProject:openThis, setOpen:setOpenThis })}
               {renderColumn({ grouped:orderedNext, weekKey:'thisWeek', headerLabel:'금주 계획', headerBg:'#0891b2', openProject:openNext, setOpen:setOpenNext })}
             </div>
