@@ -94,7 +94,7 @@ function EditableRichText({ value, onChange, style }) {
       {/* 포맷 툴바 */}
       <div style={{ display:'inline-flex', alignItems:'center', gap:2, background:'#1f2937', borderRadius:6, padding:'3px 6px', width:'fit-content', boxShadow:'0 2px 8px rgba(0,0,0,0.18)' }}>
         <ToolBtn onMouseDown={e=>fmt(e,'bold')} title="굵게 (Ctrl+B)">
-          <span style={{ fontWeight:800, fontSize:12, fontFamily:'serif' }}>B</span>
+          <span style={{ fontWeight:800, fontSize:13, fontFamily:'serif', color:'#ffffff' }}>B</span>
         </ToolBtn>
         <ToolBtn onMouseDown={e=>fmt(e,'foreColor','#ef4444')} title="빨간색">
           <span style={{ fontSize:12, color:'#ef4444', fontWeight:700 }}>A</span>
@@ -262,16 +262,39 @@ export default function SlideCapture() {
   const { data, loading, error, refetch } = useWeeklyData();
 
   const [edits,    setEdits]    = useState({});
+  const [saved,    setSaved]    = useState(false); // 저장 완료 표시
   const [thisOrder, setThisOrder] = useState(null);
   const [nextOrder, setNextOrder] = useState(null);
-  const [catOrders, setCatOrders] = useState({});   // "weekKey__project" → [cat,...]
-  const [openThis,  setOpenThis]  = useState(null); // 이번 주 열린 프로젝트
-  const [openNext,  setOpenNext]  = useState(null); // 다음 주 열린 프로젝트
+  const [catOrders, setCatOrders] = useState({});
+  const [openThis,  setOpenThis]  = useState(null);
+  const [openNext,  setOpenNext]  = useState(null);
 
   const baseThis = data ? groupByProjectCategory(data.members, 'prevWeek') : [];
   const baseNext = data ? groupByProjectCategory(data.members, 'thisWeek') : [];
 
+  // 시트 로드 시 localStorage에서 편집 복원
+  useEffect(() => {
+    if (!data?.sheetName) return;
+    try {
+      const stored = localStorage.getItem(`weekly-edits-${data.sheetName}`);
+      if (stored) setEdits(JSON.parse(stored));
+    } catch(e) {}
+  }, [data?.sheetName]);
+
   useEffect(() => { setThisOrder(null); setNextOrder(null); setOpenThis(null); setOpenNext(null); }, [data]);
+
+  // 편집 내용 localStorage 저장
+  function saveEdits() {
+    if (!data?.sheetName) return;
+    localStorage.setItem(`weekly-edits-${data.sheetName}`, JSON.stringify(edits));
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
+  function clearEdits() {
+    setEdits({});
+    if (data?.sheetName) localStorage.removeItem(`weekly-edits-${data.sheetName}`);
+  }
 
   function applyEdits(base, weekKey) {
     return base.map(([proj, cats]) => {
@@ -347,7 +370,7 @@ export default function SlideCapture() {
 
   async function handleSync() {
     setSyncing(true);
-    try { await triggerSync(); await refetch(); setEdits({}); } finally { setSyncing(false); }
+    try { await triggerSync(); await refetch(); clearEdits(); } finally { setSyncing(false); }
   }
   async function handleCapture() {
     if (!captureRef.current) return;
@@ -404,11 +427,16 @@ export default function SlideCapture() {
             <RefreshCw size={13} className={syncing?'animate-spin':''}/>
             {syncing?'동기화 중...':'시트 동기화'}
           </button>
-          {Object.keys(edits).length > 0 && (
-            <button onClick={()=>setEdits({})} className="flex items-center gap-1 text-xs text-orange-500 hover:text-orange-700">
-              <RotateCcw size={12}/> 편집 초기화
+          {Object.keys(edits).length > 0 && (<>
+            <button onClick={saveEdits}
+              className={`flex items-center gap-1 text-xs font-semibold px-3 py-1 rounded-md transition-colors
+                ${saved ? 'bg-green-100 text-green-700' : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'}`}>
+              {saved ? '✓ 저장됨' : '💾 편집 저장'}
             </button>
-          )}
+            <button onClick={clearEdits} className="flex items-center gap-1 text-xs text-orange-500 hover:text-orange-700">
+              <RotateCcw size={12}/> 초기화
+            </button>
+          </>)}
           <span className="text-xs text-gray-300">| ⠿ 드래그로 순서 변경 · 클릭으로 편집</span>
         </div>
         <button onClick={handleCapture} disabled={capturing||loading||!!error}
