@@ -1,17 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, ChevronRight, ChevronDown, AlertTriangle, CheckCircle2, Clock, BarChart3 } from 'lucide-react';
+import { X, ChevronRight, AlertTriangle, CheckCircle2, BarChart3, HelpCircle } from 'lucide-react';
 import { useWeeklyData } from '../hooks/useWeeklyData';
 
 /* ─────────────────────────────────────────────
-   RAG 설정
+   진행 상태 설정 (임원용 용어)
 ───────────────────────────────────────────── */
-const RAG = {
-  RED:   {
-    label: 'Red',
-    emoji: '🔴',
+const STATUS = {
+  RED: {
+    label: '위험',
+    subLabel: '즉시 대응 필요',
     dot: '#ef4444',
-    bg: '#fef2f2',
-    rowBg: 'linear-gradient(90deg,#fff5f5 0%,#fff 60%)',
     rowBgSolid: '#fff5f5',
     border: '#fecaca',
     textColor: '#b91c1c',
@@ -19,11 +17,9 @@ const RAG = {
     order: 0,
   },
   AMBER: {
-    label: 'Amber',
-    emoji: '🟡',
+    label: '주의',
+    subLabel: '모니터링 필요',
     dot: '#f59e0b',
-    bg: '#fffbeb',
-    rowBg: 'linear-gradient(90deg,#fffdf0 0%,#fff 60%)',
     rowBgSolid: '#fffdf0',
     border: '#fde68a',
     textColor: '#92400e',
@@ -31,11 +27,9 @@ const RAG = {
     order: 1,
   },
   GREEN: {
-    label: 'Green',
-    emoji: '🟢',
+    label: '정상',
+    subLabel: '순항 중',
     dot: '#22c55e',
-    bg: '#f0fdf4',
-    rowBg: 'transparent',
     rowBgSolid: 'transparent',
     border: '#bbf7d0',
     textColor: '#15803d',
@@ -44,7 +38,7 @@ const RAG = {
   },
 };
 
-const RAG_CYCLE = ['RED', 'AMBER', 'GREEN'];
+const STATUS_CYCLE = ['RED', 'AMBER', 'GREEN'];
 const STORAGE_KEY = 'exec-dashboard-meta-v2';
 
 function loadMeta() {
@@ -52,6 +46,82 @@ function loadMeta() {
 }
 function saveMeta(m) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(m));
+}
+
+/* ─────────────────────────────────────────────
+   HTML 태그 제거
+───────────────────────────────────────────── */
+function stripHtml(html) {
+  return (html || '').replace(/<[^>]+>/g, '').trim();
+}
+
+/* ─────────────────────────────────────────────
+   핵심 성과 / 리스크 자동 추출
+───────────────────────────────────────────── */
+function autoExtractSummary(projectName, data) {
+  if (!data?.members) return '';
+
+  const prevTasks = data.members.flatMap(m =>
+    (m.prevWeek || []).filter(t => t.project === projectName)
+  );
+  const thisTasks = data.members.flatMap(m =>
+    (m.thisWeek || []).filter(t => t.project === projectName)
+  );
+
+  // 완료 업무 → 성과
+  const achievements = prevTasks
+    .filter(t => t.status === 'done' && t.content)
+    .map(t => stripHtml(t.content))
+    .filter(Boolean)
+    .slice(0, 2);
+
+  // Stuck 업무 → 리스크
+  const risks = [...prevTasks, ...thisTasks]
+    .filter(t => t.status === 'stuck' && t.content)
+    .map(t => stripHtml(t.content))
+    .filter(Boolean)
+    .slice(0, 1);
+
+  const parts = [];
+  if (achievements.length > 0) parts.push('✅ ' + achievements.join(' / '));
+  if (risks.length > 0) parts.push('⚠️ ' + risks.join(' / '));
+
+  return parts.join('   ·   ');
+}
+
+/* ─────────────────────────────────────────────
+   툴팁 컴포넌트
+───────────────────────────────────────────── */
+function Tooltip({ text, children, position = 'bottom' }) {
+  const [show, setShow] = useState(false);
+
+  const posStyle = position === 'top'
+    ? { bottom: 'calc(100% + 7px)', left: '50%', transform: 'translateX(-50%)' }
+    : { top: 'calc(100% + 7px)', left: '50%', transform: 'translateX(-50%)' };
+
+  return (
+    <span
+      style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}
+    >
+      {children}
+      {show && (
+        <span style={{
+          position: 'absolute', ...posStyle,
+          background: '#1e293b', color: 'white',
+          fontSize: 11, fontWeight: 500,
+          padding: '6px 11px', borderRadius: 7,
+          whiteSpace: 'nowrap', zIndex: 200,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
+          pointerEvents: 'none',
+          lineHeight: 1.5,
+        }}>
+          {text}
+        </span>
+      )}
+    </span>
+  );
 }
 
 /* ─────────────────────────────────────────────
@@ -103,47 +173,138 @@ function InlineEdit({ value, onChange, placeholder = '클릭하여 입력', mult
 }
 
 /* ─────────────────────────────────────────────
-   RAG 배지 (클릭으로 순환)
+   진행률 프로그레스바
 ───────────────────────────────────────────── */
-function RagBadge({ status, onChange, size = 'md' }) {
-  const cfg = RAG[status] || RAG.GREEN;
-  function cycle(e) {
-    e.stopPropagation();
-    const next = RAG_CYCLE[(RAG_CYCLE.indexOf(status) + 1) % RAG_CYCLE.length];
-    onChange(next);
+function ProgressBar({ value, onChange }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(String(value || 0));
+  const ref = useRef(null);
+
+  useEffect(() => { if (editing && ref.current) ref.current.focus(); }, [editing]);
+
+  const pct = Math.min(100, Math.max(0, parseInt(value) || 0));
+  const barColor = pct >= 80 ? '#22c55e' : pct >= 50 ? '#f59e0b' : '#ef4444';
+  const textColor = pct >= 80 ? '#15803d' : pct >= 50 ? '#92400e' : '#b91c1c';
+
+  function commit() {
+    const v = Math.min(100, Math.max(0, parseInt(draft) || 0));
+    onChange(v);
+    setEditing(false);
   }
-  const isLg = size === 'lg';
+
+  if (editing) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+        <input
+          ref={ref}
+          type="number" min="0" max="100"
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
+          style={{
+            width: 60, border: '1.5px solid #6366f1', borderRadius: 6,
+            padding: '3px 8px', outline: 'none', background: '#eef2ff',
+            fontSize: 13, fontWeight: 700, textAlign: 'center',
+          }}
+        />
+        <span style={{ fontSize: 12, color: '#94a3b8' }}>%</span>
+      </div>
+    );
+  }
+
   return (
-    <button
-      onClick={cycle}
-      title="클릭하여 상태 변경"
-      style={{
-        display: 'inline-flex', alignItems: 'center', gap: isLg ? 8 : 5,
-        background: cfg.badgeBg, border: `1.5px solid ${cfg.border}`,
-        borderRadius: 20, padding: isLg ? '5px 14px' : '3px 10px',
-        cursor: 'pointer', whiteSpace: 'nowrap',
-        boxShadow: `0 1px 3px ${cfg.dot}25`,
-        transition: 'transform 0.12s, box-shadow 0.12s',
-      }}
-      onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.05)'; }}
-      onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}
-    >
-      <span style={{
-        width: isLg ? 12 : 9, height: isLg ? 12 : 9, borderRadius: '50%',
-        background: cfg.dot, flexShrink: 0,
-        boxShadow: `0 0 6px ${cfg.dot}80`,
-      }} />
-      <span style={{ fontSize: isLg ? 13 : 11, fontWeight: 800, color: cfg.textColor, letterSpacing: '0.02em' }}>
-        {cfg.label}
-      </span>
-    </button>
+    <Tooltip text="클릭하여 진행률 편집">
+      <div
+        style={{ cursor: 'pointer', minWidth: 110, width: '100%' }}
+        onClick={() => { setDraft(String(pct)); setEditing(true); }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{
+            flex: 1, height: 7, background: '#e2e8f0', borderRadius: 4,
+            overflow: 'hidden', minWidth: 60,
+          }}>
+            <div style={{
+              width: `${pct}%`, height: '100%',
+              background: `linear-gradient(90deg, ${barColor}bb, ${barColor})`,
+              borderRadius: 4,
+              transition: 'width 0.45s cubic-bezier(0.4,0,0.2,1)',
+            }} />
+          </div>
+          <span style={{ fontSize: 13, fontWeight: 800, color: textColor, minWidth: 34, textAlign: 'right' }}>
+            {pct}%
+          </span>
+        </div>
+      </div>
+    </Tooltip>
   );
 }
 
 /* ─────────────────────────────────────────────
-   Section helper
+   진행 상태 배지 (클릭으로 순환)
 ───────────────────────────────────────────── */
-function Section({ title, color = '#4f46e5', children, icon }) {
+function StatusBadge({ status, onChange }) {
+  const cfg = STATUS[status] || STATUS.GREEN;
+  function cycle(e) {
+    e.stopPropagation();
+    const next = STATUS_CYCLE[(STATUS_CYCLE.indexOf(status) + 1) % STATUS_CYCLE.length];
+    onChange(next);
+  }
+  return (
+    <Tooltip text={`${cfg.subLabel} · 클릭하여 변경`}>
+      <button
+        onClick={cycle}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          background: cfg.badgeBg, border: `1.5px solid ${cfg.border}`,
+          borderRadius: 20, padding: '4px 13px',
+          cursor: 'pointer', whiteSpace: 'nowrap',
+          boxShadow: `0 1px 4px ${cfg.dot}30`,
+          transition: 'transform 0.12s, box-shadow 0.12s',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.05)'; }}
+        onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}
+      >
+        <span style={{
+          width: 9, height: 9, borderRadius: '50%',
+          background: cfg.dot, flexShrink: 0,
+          boxShadow: `0 0 6px ${cfg.dot}80`,
+        }} />
+        <span style={{ fontSize: 12, fontWeight: 800, color: cfg.textColor }}>
+          {cfg.label}
+        </span>
+      </button>
+    </Tooltip>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   컬럼 헤더 (툴팁 포함)
+───────────────────────────────────────────── */
+function ColHeader({ label, tip }) {
+  return (
+    <th style={{
+      textAlign: 'left', padding: '9px 14px',
+      fontSize: 12, fontWeight: 700, color: '#475569',
+      letterSpacing: '0.03em',
+      whiteSpace: 'nowrap', userSelect: 'none',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+        {label}
+        {tip && (
+          <Tooltip text={tip} position="bottom">
+            <HelpCircle size={12} style={{ color: '#cbd5e1', cursor: 'default', flexShrink: 0 }} />
+          </Tooltip>
+        )}
+      </div>
+    </th>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   Section 헬퍼 (드로워용)
+───────────────────────────────────────────── */
+function Section({ title, color = '#4f46e5', children }) {
   return (
     <div style={{ marginBottom: 22 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
@@ -168,7 +329,7 @@ function SideDrawer({ project, meta, data, onClose, onMetaChange }) {
 
   const prevTasks = tasks.filter(t => t.week === '지난 주');
   const thisTasks = tasks.filter(t => t.week === '금주');
-  const cfg = RAG[meta.ragStatus || 'GREEN'];
+  const cfg = STATUS[meta.ragStatus || 'GREEN'];
 
   const members = data?.members?.filter(m =>
     [...m.prevWeek, ...m.thisWeek].some(t => t.project === project.name)
@@ -176,7 +337,6 @@ function SideDrawer({ project, meta, data, onClose, onMetaChange }) {
 
   return (
     <>
-      {/* 오버레이 */}
       <div
         onClick={onClose}
         style={{
@@ -191,10 +351,8 @@ function SideDrawer({ project, meta, data, onClose, onMetaChange }) {
         .drawer-scroll::-webkit-scrollbar { width:4px }
         .drawer-scroll::-webkit-scrollbar-track { background:transparent }
         .drawer-scroll::-webkit-scrollbar-thumb { background:#e2e8f0; border-radius:4px }
-        .drawer-scroll::-webkit-scrollbar-thumb:hover { background:#cbd5e1 }
       `}</style>
 
-      {/* 드로워 패널 */}
       <div style={{
         position: 'fixed', top: 0, right: 0, bottom: 0, width: 500,
         background: 'white', zIndex: 50,
@@ -202,36 +360,26 @@ function SideDrawer({ project, meta, data, onClose, onMetaChange }) {
         display: 'flex', flexDirection: 'column',
         animation: 'slideInRight 0.28s cubic-bezier(0.22,1,0.36,1)',
       }}>
-        {/* 헤더 스트립 */}
-        <div style={{
-          height: 5, flexShrink: 0,
-          background: `linear-gradient(90deg, ${cfg.dot}, ${cfg.dot}60)`,
-        }} />
+        {/* 상태 컬러 스트립 */}
+        <div style={{ height: 5, flexShrink: 0, background: `linear-gradient(90deg, ${cfg.dot}, ${cfg.dot}50)` }} />
 
-        {/* 헤더 */}
+        {/* 드로워 헤더 */}
         <div style={{
           padding: '20px 24px 16px',
           borderBottom: '1px solid #f1f5f9',
           background: cfg.rowBgSolid || '#fafaf9',
           flexShrink: 0,
         }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
-            <div>
-              <h2 style={{ fontSize: 20, fontWeight: 900, color: '#0f172a', margin: 0, letterSpacing: '-0.02em' }}>
-                {project.name}
-              </h2>
-              {meta.updatedAt && (
-                <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 3 }}>
-                  업데이트: {meta.updatedAt}
-                </p>
-              )}
-            </div>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
+            <h2 style={{ fontSize: 20, fontWeight: 900, color: '#0f172a', margin: 0, letterSpacing: '-0.02em' }}>
+              {project.name}
+            </h2>
             <button
               onClick={onClose}
               style={{
                 background: '#f1f5f9', border: 'none', cursor: 'pointer',
                 padding: 8, borderRadius: 8, color: '#64748b',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                display: 'flex', alignItems: 'center',
                 transition: 'background 0.15s',
               }}
               onMouseEnter={e => e.currentTarget.style.background = '#e2e8f0'}
@@ -241,30 +389,20 @@ function SideDrawer({ project, meta, data, onClose, onMetaChange }) {
             </button>
           </div>
 
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-            <RagBadge status={meta.ragStatus || 'GREEN'} onChange={s => onMetaChange('ragStatus', s)} size="lg" />
-            <InlineEdit
-              value={meta.currentPhase || ''}
-              onChange={v => onMetaChange('currentPhase', v)}
-              placeholder="현재 단계 입력"
-              style={{
-                fontSize: 12, color: '#475569', background: 'white',
-                borderRadius: 6, padding: '3px 10px',
-                border: '1px solid #e2e8f0',
-              }}
-            />
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+            <StatusBadge status={meta.ragStatus || 'GREEN'} onChange={s => onMetaChange('ragStatus', s)} />
+            <div style={{ flex: 1, minWidth: 150 }}>
+              <ProgressBar value={meta.progress || 0} onChange={v => onMetaChange('progress', v)} />
+            </div>
           </div>
         </div>
 
         {/* 스크롤 본문 */}
         <div className="drawer-scroll" style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
           <Section title="핵심 성과 / 리스크" color="#4f46e5">
-            <div style={{
-              background: '#f8fafc', borderRadius: 8, padding: '10px 12px',
-              border: '1px solid #e2e8f0',
-            }}>
+            <div style={{ background: '#f8fafc', borderRadius: 8, padding: '10px 12px', border: '1px solid #e2e8f0' }}>
               <InlineEdit
-                value={meta.executiveSummary || ''}
+                value={meta.executiveSummary || autoExtractSummary(project.name, data)}
                 onChange={v => onMetaChange('executiveSummary', v)}
                 placeholder="핵심 성과 또는 리스크 요약 입력"
                 multiline
@@ -274,14 +412,11 @@ function SideDrawer({ project, meta, data, onClose, onMetaChange }) {
           </Section>
 
           <Section title="의사결정 필요사항" color="#ef4444">
-            <div style={{
-              background: '#fff8f8', borderRadius: 8, padding: '10px 12px',
-              border: '1px solid #fecaca',
-            }}>
+            <div style={{ background: '#fff8f8', borderRadius: 8, padding: '10px 12px', border: '1px solid #fecaca' }}>
               <InlineEdit
                 value={meta.helpNeeded || ''}
                 onChange={v => onMetaChange('helpNeeded', v)}
-                placeholder="임원 판단 또는 승인이 필요한 사항 입력"
+                placeholder="임원 판단 또는 승인이 필요한 사항"
                 multiline
                 style={{ fontSize: 13, color: '#334155', lineHeight: 1.65 }}
               />
@@ -298,9 +433,7 @@ function SideDrawer({ project, meta, data, onClose, onMetaChange }) {
                     borderRadius: 20, padding: '4px 12px',
                   }}>
                     <span style={{ fontSize: 14 }}>{m.avatar || '👤'}</span>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: '#0369a1' }}>
-                      {m.name}
-                    </span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#0369a1' }}>{m.name}</span>
                     <span style={{ fontSize: 10, color: '#94a3b8' }}>{m.part}</span>
                   </div>
                 ))}
@@ -315,7 +448,7 @@ function SideDrawer({ project, meta, data, onClose, onMetaChange }) {
                   <div key={i} style={{
                     display: 'flex', gap: 8, padding: '6px 10px',
                     background: '#f8fafc', borderRadius: 6,
-                    borderLeft: '3px solid #e2e8f0',
+                    borderLeft: `3px solid ${t.status === 'done' ? '#22c55e' : t.status === 'stuck' ? '#ef4444' : '#e2e8f0'}`,
                   }}>
                     {t.category && (
                       <span style={{
@@ -365,21 +498,16 @@ function SideDrawer({ project, meta, data, onClose, onMetaChange }) {
           )}
         </div>
 
-        {/* 하단 힌트 */}
         <div style={{
           padding: '10px 24px', borderTop: '1px solid #f1f5f9',
           background: '#fafaf9', flexShrink: 0,
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
         }}>
-          <span style={{ fontSize: 11, color: '#94a3b8' }}>
-            RAG 배지 클릭 → 상태 변경 · 텍스트 클릭 → 편집 (자동 저장)
-          </span>
           <button
             onClick={onClose}
             style={{
               fontSize: 12, color: '#64748b', background: '#f1f5f9',
-              border: 'none', borderRadius: 6, padding: '4px 12px',
-              cursor: 'pointer',
+              border: 'none', borderRadius: 6, padding: '5px 14px', cursor: 'pointer',
             }}
           >
             닫기
@@ -396,42 +524,30 @@ function SideDrawer({ project, meta, data, onClose, onMetaChange }) {
 function SummaryCard({ label, value, sub, color, bg, accent, icon: Icon }) {
   return (
     <div style={{
-      background: bg,
-      border: `1.5px solid ${accent}40`,
-      borderRadius: 12,
-      padding: '14px 20px 12px',
-      position: 'relative',
-      overflow: 'hidden',
+      background: bg, border: `1.5px solid ${accent}40`,
+      borderRadius: 12, padding: '14px 20px 12px',
+      position: 'relative', overflow: 'hidden',
       boxShadow: `0 2px 10px ${accent}14`,
     }}>
-      {/* 배경 장식 */}
       <div style={{
         position: 'absolute', right: -10, top: -10,
         width: 70, height: 70, borderRadius: '50%',
         background: `${accent}10`,
       }} />
-
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', position: 'relative' }}>
         <div>
           <p style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', marginBottom: 4, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
             {label}
           </p>
-          <p style={{
-            fontSize: 48, fontWeight: 900, color,
-            lineHeight: 1, marginBottom: sub ? 5 : 0,
-            letterSpacing: '-0.04em',
-          }}>
+          <p style={{ fontSize: 48, fontWeight: 900, color, lineHeight: 1, marginBottom: sub ? 5 : 0, letterSpacing: '-0.04em' }}>
             {value}
           </p>
-          {sub && (
-            <p style={{ fontSize: 12, color: '#9ca3af', fontWeight: 500 }}>{sub}</p>
-          )}
+          {sub && <p style={{ fontSize: 12, color: '#9ca3af', fontWeight: 500 }}>{sub}</p>}
         </div>
         {Icon && (
           <div style={{
             width: 38, height: 38, borderRadius: 10, background: `${accent}18`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            flexShrink: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
             <Icon size={20} color={color} strokeWidth={2.2} />
           </div>
@@ -446,11 +562,10 @@ function SummaryCard({ label, value, sub, color, bg, accent, icon: Icon }) {
 ───────────────────────────────────────────── */
 export default function ExecutiveDashboard() {
   const { data, loading, error } = useWeeklyData();
-  const [meta, setMeta]   = useState(loadMeta);
+  const [meta, setMeta]     = useState(loadMeta);
   const [drawer, setDrawer] = useState(null);
-  const [filterRag, setFilterRag] = useState('ALL'); // ALL | RED | AMBER | GREEN
+  const [filter, setFilter] = useState('ALL');
 
-  // 프로젝트 목록 추출
   const projects = data ? [...new Set(
     data.members.flatMap(m => [
       ...m.prevWeek.map(t => t.project),
@@ -467,17 +582,16 @@ export default function ExecutiveDashboard() {
   }
 
   function getProjectMeta(name) {
-    return meta[name] || { ragStatus: 'GREEN', currentPhase: '', executiveSummary: '', helpNeeded: '' };
+    return meta[name] || { ragStatus: 'GREEN', progress: 0, executiveSummary: '', helpNeeded: '' };
   }
 
-  // RAG 순 정렬
   const sorted = [...projects].sort((a, b) => {
-    const ra = RAG[getProjectMeta(a).ragStatus || 'GREEN'].order;
-    const rb = RAG[getProjectMeta(b).ragStatus || 'GREEN'].order;
+    const ra = STATUS[getProjectMeta(a).ragStatus || 'GREEN'].order;
+    const rb = STATUS[getProjectMeta(b).ragStatus || 'GREEN'].order;
     return ra - rb;
   });
 
-  const filtered = filterRag === 'ALL' ? sorted : sorted.filter(p => getProjectMeta(p).ragStatus === filterRag);
+  const filtered = filter === 'ALL' ? sorted : sorted.filter(p => getProjectMeta(p).ragStatus === filter);
 
   const total  = sorted.length;
   const reds   = sorted.filter(p => getProjectMeta(p).ragStatus === 'RED').length;
@@ -491,11 +605,11 @@ export default function ExecutiveDashboard() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#f8fafc', overflowY: 'auto' }}>
       <style>{`
+        .exec-table tbody tr { transition: filter 0.1s; }
         .exec-table tbody tr:hover { filter: brightness(0.97); }
-        .proj-link { transition: color 0.12s; }
         .proj-link:hover { color: #4f46e5 !important; }
-        .rag-filter-btn { transition: all 0.15s; }
-        .rag-filter-btn:hover { filter: brightness(0.95); transform: translateY(-1px); }
+        .status-filter-btn { transition: all 0.15s; }
+        .status-filter-btn:hover { filter: brightness(0.94); transform: translateY(-1px); }
         .exec-scroll::-webkit-scrollbar { height: 4px; }
         .exec-scroll::-webkit-scrollbar-track { background: transparent; }
         .exec-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 4px; }
@@ -503,10 +617,8 @@ export default function ExecutiveDashboard() {
 
       {/* ── 헤더 바 ── */}
       <div style={{
-        padding: '10px 20px',
-        background: 'white',
-        borderBottom: '1px solid #e2e8f0',
-        flexShrink: 0,
+        padding: '10px 20px', background: 'white',
+        borderBottom: '1px solid #e2e8f0', flexShrink: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -530,24 +642,24 @@ export default function ExecutiveDashboard() {
           </div>
         </div>
 
-        {/* RAG 필터 버튼 */}
+        {/* 상태 필터 */}
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           {[
-            { key: 'ALL', label: '전체', color: '#64748b', bg: '#f1f5f9', activeBg: '#1e293b', activeColor: 'white' },
-            { key: 'RED', label: `🔴 Red (${reds})`, color: '#b91c1c', bg: '#fee2e2', activeBg: '#ef4444', activeColor: 'white' },
-            { key: 'AMBER', label: `🟡 Amber (${ambers})`, color: '#92400e', bg: '#fef3c7', activeBg: '#f59e0b', activeColor: 'white' },
-            { key: 'GREEN', label: `🟢 Green (${greens})`, color: '#15803d', bg: '#dcfce7', activeBg: '#22c55e', activeColor: 'white' },
+            { key: 'ALL',   label: '전체',          color: '#64748b', bg: '#f1f5f9', activeBg: '#1e293b', activeColor: 'white' },
+            { key: 'RED',   label: `🔴 위험 (${reds})`,  color: '#b91c1c', bg: '#fee2e2', activeBg: '#ef4444', activeColor: 'white' },
+            { key: 'AMBER', label: `🟡 주의 (${ambers})`, color: '#92400e', bg: '#fef3c7', activeBg: '#f59e0b', activeColor: 'white' },
+            { key: 'GREEN', label: `🟢 정상 (${greens})`, color: '#15803d', bg: '#dcfce7', activeBg: '#22c55e', activeColor: 'white' },
           ].map(btn => (
             <button
               key={btn.key}
-              className="rag-filter-btn"
-              onClick={() => setFilterRag(btn.key)}
+              className="status-filter-btn"
+              onClick={() => setFilter(btn.key)}
               style={{
                 fontSize: 12, fontWeight: 700, padding: '5px 14px', borderRadius: 20,
                 border: 'none', cursor: 'pointer', letterSpacing: '0.02em',
-                background: filterRag === btn.key ? btn.activeBg : btn.bg,
-                color: filterRag === btn.key ? btn.activeColor : btn.color,
-                boxShadow: filterRag === btn.key ? `0 2px 8px ${btn.activeBg}50` : 'none',
+                background: filter === btn.key ? btn.activeBg : btn.bg,
+                color: filter === btn.key ? btn.activeColor : btn.color,
+                boxShadow: filter === btn.key ? `0 2px 8px ${btn.activeBg}55` : 'none',
               }}
             >
               {btn.label}
@@ -556,11 +668,10 @@ export default function ExecutiveDashboard() {
         </div>
       </div>
 
-      {/* 로딩 / 에러 */}
       {loading && (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 13 }}>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 32, marginBottom: 8, animation: 'spin 1s linear infinite' }}>⟳</div>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>⟳</div>
             데이터 불러오는 중...
           </div>
         </div>
@@ -574,29 +685,19 @@ export default function ExecutiveDashboard() {
       {!loading && !error && data && (
         <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
 
-          {/* ── 종합 현황 메트릭 카드 3개 ── */}
+          {/* ── 종합 현황 카드 ── */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+            <SummaryCard label="전체 프로젝트" value={total} color="#4f46e5" bg="#eef2ff" accent="#4f46e5" icon={BarChart3} />
             <SummaryCard
-              label="전체 프로젝트"
-              value={total}
-              color="#4f46e5"
-              bg="#eef2ff"
-              accent="#4f46e5"
-              icon={BarChart3}
-            />
-            <SummaryCard
-              label="정상 순항 🟢"
+              label="정상 순항"
               value={greens}
               sub={greens === total ? '전체 정상 운영 중' : `전체 ${total}건 중 ${greens}건`}
-              color="#16a34a"
-              bg="#f0fdf4"
-              accent="#22c55e"
-              icon={CheckCircle2}
+              color="#16a34a" bg="#f0fdf4" accent="#22c55e" icon={CheckCircle2}
             />
             <SummaryCard
-              label="이슈 / 지연 ⚠️"
+              label="주의 / 위험"
               value={issues}
-              sub={issues > 0 ? `🔴 Red ${reds}건  ·  🟡 Amber ${ambers}건` : '이슈 없음 — 순항 중'}
+              sub={issues > 0 ? `🔴 위험 ${reds}건  ·  🟡 주의 ${ambers}건` : '이슈 없음 — 전체 순항 중'}
               color={issues > 0 ? '#dc2626' : '#16a34a'}
               bg={issues > 0 ? '#fef2f2' : '#f0fdf4'}
               accent={issues > 0 ? '#ef4444' : '#22c55e'}
@@ -604,72 +705,53 @@ export default function ExecutiveDashboard() {
             />
           </div>
 
-          {/* ── RAG 마스터 테이블 ── */}
+          {/* ── 마스터 테이블 ── */}
           <div style={{
             background: 'white', borderRadius: 12,
             border: '1px solid #e2e8f0',
             boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
             overflow: 'hidden',
           }}>
-            {/* 테이블 헤더 */}
             <div style={{
-              padding: '10px 16px',
-              borderBottom: '1px solid #f1f5f9',
+              padding: '10px 16px', borderBottom: '1px solid #f1f5f9',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             }}>
-              <div>
-                <h2 style={{ fontSize: 15, fontWeight: 800, color: '#0f172a', margin: 0, letterSpacing: '-0.01em' }}>
-                  프로젝트 RAG 현황
-                </h2>
-                <p style={{ fontSize: 12, color: '#94a3b8', margin: 0, marginTop: 1 }}>
-                  🔴 Red → 🟡 Amber → 🟢 Green 순 정렬 · 프로젝트명 클릭 → 상세 드로워
-                </p>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{
-                  fontSize: 12, color: '#94a3b8',
-                  background: '#f8fafc', padding: '3px 10px',
-                  borderRadius: 6, border: '1px solid #e2e8f0',
-                }}>
-                  총 {filtered.length}건
-                </span>
-              </div>
+              <h2 style={{ fontSize: 15, fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                프로젝트 진행 현황
+              </h2>
+              <span style={{
+                fontSize: 12, color: '#94a3b8', background: '#f8fafc',
+                padding: '3px 10px', borderRadius: 6, border: '1px solid #e2e8f0',
+              }}>
+                총 {filtered.length}건
+              </span>
             </div>
 
-            {/* 테이블 */}
             <div className="exec-scroll" style={{ overflowX: 'auto' }}>
               <table className="exec-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
                 <thead>
                   <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
-                    {[
-                      { label: '프로젝트명' },
-                      { label: '카테고리' },
-                      { label: '현재 단계' },
-                      { label: 'RAG 상태' },
-                      { label: '이번 주 핵심 성과 / 리스크' },
-                      { label: '비고 (의사결정 필요사항)' },
-                    ].map(col => (
-                      <th key={col.label} style={{
-                        textAlign: 'left', padding: '9px 14px',
-                        fontSize: 12, fontWeight: 700, color: '#475569',
-                        letterSpacing: '0.03em', textTransform: 'uppercase',
-                        whiteSpace: 'nowrap',
-                      }}>
-                        {col.label}
-                      </th>
-                    ))}
+                    <ColHeader label="프로젝트명"        tip="클릭하면 상세 내용을 볼 수 있습니다" />
+                    <ColHeader label="카테고리" />
+                    <ColHeader label="진행률"            tip="클릭하여 % 직접 입력 가능" />
+                    <ColHeader label="진행 상태"         tip="정상: 순항 중 / 주의: 모니터링 필요 / 위험: 즉시 대응 필요 · 클릭하여 변경" />
+                    <ColHeader label="핵심 성과 / 리스크" tip="Google Sheets 데이터 기반 자동 추출 · ✅ 완료 업무 / ⚠️ 지연 리스크 · 클릭하여 직접 편집" />
+                    <ColHeader label="의사결정 필요사항"  tip="임원 판단이 필요한 사항 · 클릭하여 편집" />
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((name, idx) => {
-                    const m   = getProjectMeta(name);
-                    const cfg = RAG[m.ragStatus || 'GREEN'];
+                  {filtered.map(name => {
+                    const m      = getProjectMeta(name);
+                    const cfg    = STATUS[m.ragStatus || 'GREEN'];
                     const isIssue = m.ragStatus === 'RED' || m.ragStatus === 'AMBER';
 
                     const cats = [...new Set(data.members.flatMap(member => [
                       ...member.prevWeek.filter(t => t.project === name).map(t => t.category),
                       ...member.thisWeek.filter(t => t.project === name).map(t => t.category),
                     ]).filter(Boolean))];
+
+                    const autoSummary = autoExtractSummary(name, data);
+                    const hasManual   = Boolean(m.executiveSummary);
 
                     return (
                       <tr
@@ -678,7 +760,6 @@ export default function ExecutiveDashboard() {
                           background: cfg.rowBgSolid,
                           borderBottom: '1px solid #f1f5f9',
                           borderLeft: isIssue ? `3px solid ${cfg.dot}` : '3px solid transparent',
-                          transition: 'filter 0.12s',
                         }}
                       >
                         {/* 프로젝트명 */}
@@ -690,11 +771,11 @@ export default function ExecutiveDashboard() {
                               display: 'flex', alignItems: 'center', gap: 5,
                               color: '#1e40af', fontWeight: 800, fontSize: 14,
                               background: 'none', border: 'none', cursor: 'pointer',
-                              padding: 0, textAlign: 'left',
+                              padding: 0, textAlign: 'left', transition: 'color 0.12s',
                             }}
                           >
                             {name}
-                            <ChevronRight size={13} style={{ opacity: 0.5, flexShrink: 0 }} />
+                            <ChevronRight size={13} style={{ opacity: 0.45, flexShrink: 0 }} />
                           </button>
                         </td>
 
@@ -712,19 +793,17 @@ export default function ExecutiveDashboard() {
                           </div>
                         </td>
 
-                        {/* 현재 단계 */}
-                        <td style={{ padding: '11px 14px' }}>
-                          <InlineEdit
-                            value={m.currentPhase || ''}
-                            onChange={v => updateMeta(name, 'currentPhase', v)}
-                            placeholder="단계 입력"
-                            style={{ fontSize: 13, color: '#374151' }}
+                        {/* 진행률 */}
+                        <td style={{ padding: '11px 14px', minWidth: 130 }}>
+                          <ProgressBar
+                            value={m.progress || 0}
+                            onChange={v => updateMeta(name, 'progress', v)}
                           />
                         </td>
 
-                        {/* RAG 상태 */}
+                        {/* 진행 상태 */}
                         <td style={{ padding: '11px 14px', whiteSpace: 'nowrap' }}>
-                          <RagBadge
+                          <StatusBadge
                             status={m.ragStatus || 'GREEN'}
                             onChange={s => updateMeta(name, 'ragStatus', s)}
                           />
@@ -732,16 +811,37 @@ export default function ExecutiveDashboard() {
 
                         {/* 핵심 성과 / 리스크 */}
                         <td style={{ padding: '11px 14px' }}>
-                          <InlineEdit
-                            value={m.executiveSummary || ''}
-                            onChange={v => updateMeta(name, 'executiveSummary', v)}
-                            placeholder="핵심 성과 또는 리스크 요약"
-                            multiline
-                            style={{ fontSize: 13, color: '#374151', lineHeight: 1.55 }}
-                          />
+                          {hasManual ? (
+                            /* 수동 편집 모드 */
+                            <InlineEdit
+                              value={m.executiveSummary}
+                              onChange={v => updateMeta(name, 'executiveSummary', v)}
+                              placeholder="핵심 성과 또는 리스크 요약"
+                              multiline
+                              style={{ fontSize: 13, color: '#374151', lineHeight: 1.55 }}
+                            />
+                          ) : (
+                            /* 자동 추출 표시 (클릭 시 편집 모드로 전환) */
+                            <Tooltip text="자동 추출 데이터 · 클릭하여 직접 편집">
+                              <span
+                                onClick={() => updateMeta(name, 'executiveSummary', autoSummary)}
+                                style={{
+                                  fontSize: 13, color: '#374151', lineHeight: 1.6,
+                                  cursor: 'text', display: 'block',
+                                  borderLeft: '2px solid #c7d2fe',
+                                  paddingLeft: 8,
+                                  borderRadius: 2,
+                                }}
+                              >
+                                {autoSummary || (
+                                  <span style={{ color: '#d1d5db', fontStyle: 'italic' }}>데이터 없음</span>
+                                )}
+                              </span>
+                            </Tooltip>
+                          )}
                         </td>
 
-                        {/* 비고 */}
+                        {/* 의사결정 필요사항 */}
                         <td style={{ padding: '11px 14px' }}>
                           <InlineEdit
                             value={m.helpNeeded || ''}
@@ -765,26 +865,6 @@ export default function ExecutiveDashboard() {
                 </tbody>
               </table>
             </div>
-          </div>
-
-          {/* ── 하단 안내 ── */}
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20,
-            paddingBottom: 4,
-          }}>
-            {[
-              { icon: '👆', text: '프로젝트명 클릭 → 상세 드로워 열기' },
-              { icon: '🔄', text: 'RAG 배지 클릭 → 상태 순환' },
-              { icon: '✏️', text: '셀 클릭 → 인라인 편집' },
-              { icon: '💾', text: '자동 저장' },
-            ].map(item => (
-              <span key={item.text} style={{
-                fontSize: 12, color: '#94a3b8',
-                display: 'flex', alignItems: 'center', gap: 4,
-              }}>
-                {item.icon} {item.text}
-              </span>
-            ))}
           </div>
         </div>
       )}
