@@ -196,7 +196,7 @@ function SortableCategoryBlock({ id, cat, tasks, color, weekKey, project, onEdit
 
 /* ─── 프로젝트 아코디언 카드 (드래그 가능) ─── */
 function SortableProjectAccordion({ project, cats, total, color, isOpen, onToggle,
-  catOrder, onCatReorder, weekKey, onEdit, onDeleteTask, onAddTask, sensors }) {
+  catOrder, onCatReorder, weekKey, onEdit, onDeleteTask, onAddTask, sensors, onDelete }) {
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: project });
 
@@ -231,7 +231,15 @@ function SortableProjectAccordion({ project, cats, total, color, isOpen, onToggl
         </div>
         <div style={{ width:3, height:14, borderRadius:2, background:color, marginRight:8, flexShrink:0 }}/>
         <span style={{ fontSize:12, fontWeight:700, color:'#111827', flex:1 }}>{project}</span>
-        <span style={{ fontSize:10, color:'#9ca3af', marginRight:8 }}>{total}건</span>
+        <span style={{ fontSize:10, color:'#9ca3af', marginRight:6 }}>{total}건</span>
+        {/* 삭제 버튼 */}
+        <span
+          onClick={e => { e.stopPropagation(); onDelete(); }}
+          title="프로젝트 숨기기"
+          style={{ fontSize:12, color:'#d1d5db', cursor:'pointer', marginRight:6, padding:'0 2px', lineHeight:1, flexShrink:0 }}
+          onMouseEnter={e => e.currentTarget.style.color='#ef4444'}
+          onMouseLeave={e => e.currentTarget.style.color='#d1d5db'}
+        >✕</span>
         {/* ChevronDown 회전 애니메이션 */}
         <ChevronDown size={14} style={{ color:isOpen?color:'#9ca3af', transform:isOpen?'rotate(180deg)':'rotate(0deg)', transition:'transform 0.25s ease', flexShrink:0 }}/>
       </div>
@@ -268,16 +276,23 @@ export default function SlideCapture() {
   const [catOrders, setCatOrders] = useState({});
   const [openThis,  setOpenThis]  = useState(null);
   const [openNext,  setOpenNext]  = useState(null);
+  // 삭제된 프로젝트: { prevWeek: Set, thisWeek: Set }
+  const [deleted,   setDeleted]   = useState({ prevWeek: new Set(), thisWeek: new Set() });
 
   const baseThis = data ? groupByProjectCategory(data.members, 'prevWeek') : [];
   const baseNext = data ? groupByProjectCategory(data.members, 'thisWeek') : [];
 
-  // 시트 로드 시 localStorage에서 편집 복원
+  // 시트 로드 시 localStorage에서 편집·삭제 복원
   useEffect(() => {
     if (!data?.sheetName) return;
     try {
       const stored = localStorage.getItem(`weekly-edits-${data.sheetName}`);
       if (stored) setEdits(JSON.parse(stored));
+      const del = localStorage.getItem(`weekly-deleted-${data.sheetName}`);
+      if (del) {
+        const p = JSON.parse(del);
+        setDeleted({ prevWeek: new Set(p.prevWeek || []), thisWeek: new Set(p.thisWeek || []) });
+      }
     } catch(e) {}
   }, [data?.sheetName]);
 
@@ -287,13 +302,36 @@ export default function SlideCapture() {
   function saveEdits() {
     if (!data?.sheetName) return;
     localStorage.setItem(`weekly-edits-${data.sheetName}`, JSON.stringify(edits));
+    localStorage.setItem(`weekly-deleted-${data.sheetName}`, JSON.stringify({
+      prevWeek: [...deleted.prevWeek], thisWeek: [...deleted.thisWeek],
+    }));
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
 
   function clearEdits() {
     setEdits({});
-    if (data?.sheetName) localStorage.removeItem(`weekly-edits-${data.sheetName}`);
+    setDeleted({ prevWeek: new Set(), thisWeek: new Set() });
+    if (data?.sheetName) {
+      localStorage.removeItem(`weekly-edits-${data.sheetName}`);
+      localStorage.removeItem(`weekly-deleted-${data.sheetName}`);
+    }
+  }
+
+  function deleteProject(weekKey, project) {
+    setDeleted(prev => {
+      const next = new Set(prev[weekKey]);
+      next.add(project);
+      return { ...prev, [weekKey]: next };
+    });
+  }
+
+  function restoreProject(weekKey, project) {
+    setDeleted(prev => {
+      const next = new Set(prev[weekKey]);
+      next.delete(project);
+      return { ...prev, [weekKey]: next };
+    });
   }
 
   function applyEdits(base, weekKey) {
@@ -313,8 +351,10 @@ export default function SlideCapture() {
     if (!order) return grouped;
     return [...grouped].sort((a,b) => order.indexOf(a[0]) - order.indexOf(b[0]));
   }
-  const orderedThis = ordered(thisWeekGrouped, thisOrder);
-  const orderedNext = ordered(nextWeekGrouped, nextOrder);
+  const orderedThis = ordered(thisWeekGrouped, thisOrder).filter(([p]) => !deleted.prevWeek.has(p));
+  const orderedNext = ordered(nextWeekGrouped, nextOrder).filter(([p]) => !deleted.thisWeek.has(p));
+
+  const hasDeleted = deleted.prevWeek.size > 0 || deleted.thisWeek.size > 0;
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -401,6 +441,7 @@ export default function SlideCapture() {
                   color={PROJECT_COLORS[idx % PROJECT_COLORS.length]}
                   isOpen={openProject === project}
                   onToggle={() => setOpen(openProject === project ? null : project)}
+                  onDelete={() => deleteProject(weekKey, project)}
                   catOrder={getCatOrder(weekKey, project)}
                   onCatReorder={order => setCatOrder(weekKey, project, order)}
                   weekKey={weekKey}
@@ -427,7 +468,7 @@ export default function SlideCapture() {
             <RefreshCw size={13} className={syncing?'animate-spin':''}/>
             {syncing?'동기화 중...':'시트 동기화'}
           </button>
-          {Object.keys(edits).length > 0 && (<>
+          {(Object.keys(edits).length > 0 || hasDeleted) && (<>
             <button onClick={saveEdits}
               className={`flex items-center gap-1 text-xs font-semibold px-3 py-1 rounded-md transition-colors
                 ${saved ? 'bg-green-100 text-green-700' : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'}`}>
@@ -437,6 +478,23 @@ export default function SlideCapture() {
               <RotateCcw size={12}/> 초기화
             </button>
           </>)}
+          {hasDeleted && (
+            <div className="flex items-center gap-1 text-xs text-gray-400">
+              <span>숨김:</span>
+              {[...deleted.prevWeek].map(p => (
+                <button key={`p-${p}`} onClick={() => restoreProject('prevWeek', p)}
+                  className="px-1.5 py-0.5 bg-gray-100 hover:bg-indigo-100 hover:text-indigo-600 rounded text-xs transition-colors">
+                  {p} ↩
+                </button>
+              ))}
+              {[...deleted.thisWeek].map(p => (
+                <button key={`t-${p}`} onClick={() => restoreProject('thisWeek', p)}
+                  className="px-1.5 py-0.5 bg-gray-100 hover:bg-indigo-100 hover:text-indigo-600 rounded text-xs transition-colors">
+                  {p} ↩
+                </button>
+              ))}
+            </div>
+          )}
           <span className="text-xs text-gray-300">| ⠿ 드래그로 순서 변경 · 클릭으로 편집</span>
         </div>
         <button onClick={handleCapture} disabled={capturing||loading||!!error}
