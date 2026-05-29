@@ -57,35 +57,100 @@ function ScaledSlide({ captureRef, children }) {
   );
 }
 
-/* ─── 인라인 편집 텍스트 ─── */
-function EditableText({ value, onChange, style }) {
+/* ─── 리치 텍스트 인라인 에디터 (Bold / Red) ─── */
+function EditableRichText({ value, onChange, style }) {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft]     = useState(value);
-  const taRef = useRef(null);
-  function start() { setDraft(value); setEditing(true); }
-  function commit() { onChange(draft); setEditing(false); }
+  const editorRef = useRef(null);
+
+  // 편집 모드 진입 시 HTML 주입 + 포커스
   useEffect(() => {
-    if (editing && taRef.current) {
-      taRef.current.focus(); taRef.current.select();
-      taRef.current.style.height = 'auto';
-      taRef.current.style.height = taRef.current.scrollHeight + 'px';
+    if (editing && editorRef.current) {
+      editorRef.current.innerHTML = value || '';
+      editorRef.current.focus();
+      // 커서를 끝으로
+      const range = document.createRange();
+      const sel   = window.getSelection();
+      range.selectNodeContents(editorRef.current);
+      range.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(range);
     }
   }, [editing]);
+
+  function commit() {
+    if (editorRef.current) onChange(editorRef.current.innerHTML);
+    setEditing(false);
+  }
+
+  // toolbar 버튼: onMouseDown + preventDefault → 에디터 포커스 유지
+  function fmt(e, cmd, val) {
+    e.preventDefault();
+    editorRef.current?.focus();
+    document.execCommand(cmd, false, val);
+  }
+
   if (editing) return (
-    <textarea ref={taRef} value={draft}
-      onChange={e => { setDraft(e.target.value); e.target.style.height='auto'; e.target.style.height=e.target.scrollHeight+'px'; }}
-      onBlur={commit}
-      onKeyDown={e => { if(e.key==='Escape') setEditing(false); if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();commit();} }}
-      style={{...style, width:'100%', border:'1.5px solid #6366f1', borderRadius:4, outline:'none', padding:'2px 4px', resize:'none', overflow:'hidden', background:'#eef2ff', fontFamily:'inherit'}}
+    <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
+      {/* 포맷 툴바 */}
+      <div style={{ display:'inline-flex', alignItems:'center', gap:2, background:'#1f2937', borderRadius:6, padding:'3px 6px', width:'fit-content', boxShadow:'0 2px 8px rgba(0,0,0,0.18)' }}>
+        <ToolBtn onMouseDown={e=>fmt(e,'bold')} title="굵게 (Ctrl+B)">
+          <span style={{ fontWeight:800, fontSize:12, fontFamily:'serif' }}>B</span>
+        </ToolBtn>
+        <ToolBtn onMouseDown={e=>fmt(e,'foreColor','#ef4444')} title="빨간색">
+          <span style={{ fontSize:12, color:'#ef4444', fontWeight:700 }}>A</span>
+          <span style={{ width:8, height:3, background:'#ef4444', borderRadius:1, position:'absolute', bottom:1, left:'50%', transform:'translateX(-50%)' }}/>
+        </ToolBtn>
+        <ToolBtn onMouseDown={e=>fmt(e,'foreColor','#111827')} title="색상 초기화">
+          <span style={{ fontSize:11, color:'#9ca3af' }}>A</span>
+        </ToolBtn>
+        <div style={{ width:1, height:14, background:'#374151', margin:'0 2px' }}/>
+        <ToolBtn onMouseDown={e=>fmt(e,'removeFormat')} title="서식 제거">
+          <span style={{ fontSize:10, color:'#6b7280' }}>✕</span>
+        </ToolBtn>
+        <div style={{ width:1, height:14, background:'#374151', margin:'0 2px' }}/>
+        <ToolBtn onMouseDown={e=>{e.preventDefault();commit();}} title="저장 (Enter)">
+          <span style={{ fontSize:10, color:'#6ee7b7' }}>저장</span>
+        </ToolBtn>
+      </div>
+      {/* contentEditable */}
+      <div
+        ref={editorRef}
+        contentEditable
+        suppressContentEditableWarning
+        onBlur={commit}
+        onKeyDown={e => { if(e.key==='Escape') setEditing(false); }}
+        style={{ ...style, minHeight:18, outline:'1.5px solid #6366f1', borderRadius:4,
+          padding:'3px 6px', background:'#eef2ff', wordBreak:'break-word', whiteSpace:'pre-wrap',
+          lineHeight:1.6 }}
+      />
+    </div>
+  );
+
+  // 표시 모드: HTML 렌더링
+  const isEmpty = !value || value === '' || value === '<br>';
+  return (
+    <span
+      onClick={() => setEditing(true)}
+      title="클릭하여 편집"
+      dangerouslySetInnerHTML={{ __html: isEmpty ? '<span style="color:#d1d5db;font-style:italic">내용 없음</span>' : value }}
+      style={{ ...style, cursor:'text', borderRadius:3, padding:'1px 3px', display:'block',
+        outline:'1px dashed transparent', transition:'outline 0.15s', wordBreak:'break-word', whiteSpace:'pre-wrap' }}
+      onMouseEnter={e=>e.currentTarget.style.outline='1px dashed #a5b4fc'}
+      onMouseLeave={e=>e.currentTarget.style.outline='1px dashed transparent'}
     />
   );
+}
+
+function ToolBtn({ children, onMouseDown, title }) {
+  const [hover, setHover] = useState(false);
   return (
-    <span onClick={start} title="클릭하여 편집"
-      style={{...style, cursor:'text', borderRadius:3, padding:'1px 3px', display:'block', outline:'1px dashed transparent', transition:'outline 0.15s'}}
-      onMouseEnter={e=>e.currentTarget.style.outline='1px dashed #a5b4fc'}
-      onMouseLeave={e=>e.currentTarget.style.outline='1px dashed transparent'}>
-      {value||<span style={{color:'#d1d5db',fontStyle:'italic'}}>내용 없음</span>}
-    </span>
+    <button onMouseDown={onMouseDown} title={title}
+      onMouseEnter={()=>setHover(true)} onMouseLeave={()=>setHover(false)}
+      style={{ position:'relative', display:'flex', alignItems:'center', justifyContent:'center',
+        background: hover?'#374151':'transparent', border:'none', cursor:'pointer',
+        borderRadius:4, padding:'2px 6px', minWidth:22, height:22, transition:'background 0.1s' }}>
+      {children}
+    </button>
   );
 }
 
@@ -111,7 +176,7 @@ function SortableCategoryBlock({ id, cat, tasks, color, weekKey, project, onEdit
           {tasks.map((content, i) => (
             <div key={i} style={{ display:'flex', gap:4, alignItems:'flex-start' }}>
               <span style={{ color, fontSize:10, marginTop:3, flexShrink:0 }}>•</span>
-              <EditableText value={content} onChange={val=>onEdit(weekKey,project,cat,i,val)}
+              <EditableRichText value={content} onChange={val=>onEdit(weekKey,project,cat,i,val)}
                 style={{ fontSize:11, color:'#374151', lineHeight:1.5, flex:1 }}/>
               <span onClick={()=>onDeleteTask(weekKey,project,cat,i)}
                 style={{ fontSize:10, color:'#d1d5db', cursor:'pointer', flexShrink:0, marginTop:2 }}
