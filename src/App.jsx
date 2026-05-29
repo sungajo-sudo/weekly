@@ -3,9 +3,11 @@ import Sidebar from './components/Sidebar';
 import SlideCapture from './pages/SlideCapture';
 import AnnualArchive from './pages/AnnualArchive';
 import SyncSettings from './pages/SyncSettings';
+import ExecutiveDashboard from './pages/ExecutiveDashboard';
 
 const PAGES = {
   slide: SlideCapture,
+  executive: ExecutiveDashboard,
   archive: AnnualArchive,
   settings: SyncSettings,
 };
