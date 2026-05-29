@@ -1,11 +1,13 @@
 import { google } from 'googleapis';
 
 export function getSheets() {
-  const auth = new google.auth.GoogleAuth({
-    credentials: {
-      client_email: process.env.GOOGLE_CLIENT_EMAIL,
-      private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    },
+  const privateKey = (process.env.GOOGLE_PRIVATE_KEY || '')
+    .replace(/\\n/g, '\n')   // literal \n → real newline
+    .replace(/^"|"$/g, '');  // strip surrounding quotes if any
+
+  const auth = new google.auth.JWT({
+    email: process.env.GOOGLE_CLIENT_EMAIL?.trim(),
+    key: privateKey,
     scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
   });
   return google.sheets({ version: 'v4', auth });
