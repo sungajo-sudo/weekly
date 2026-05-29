@@ -13,7 +13,7 @@ const PAGES = {
 };
 
 export default function App() {
-  const [page, setPage] = useState('slide');
+  const [page, setPage] = useState('executive');
   const Page = PAGES[page];
 
   return (

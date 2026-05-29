@@ -398,43 +398,38 @@ function SummaryCard({ label, value, sub, color, bg, accent, icon: Icon }) {
     <div style={{
       background: bg,
       border: `1.5px solid ${accent}40`,
-      borderRadius: 16,
-      padding: '22px 26px 18px',
+      borderRadius: 12,
+      padding: '14px 20px 12px',
       position: 'relative',
       overflow: 'hidden',
-      boxShadow: `0 2px 12px ${accent}18`,
+      boxShadow: `0 2px 10px ${accent}14`,
     }}>
       {/* 배경 장식 */}
       <div style={{
-        position: 'absolute', right: -12, top: -12,
-        width: 80, height: 80, borderRadius: '50%',
-        background: `${accent}12`,
-      }} />
-      <div style={{
-        position: 'absolute', right: -4, top: -4,
-        width: 50, height: 50, borderRadius: '50%',
+        position: 'absolute', right: -10, top: -10,
+        width: 70, height: 70, borderRadius: '50%',
         background: `${accent}10`,
       }} />
 
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', position: 'relative' }}>
         <div>
-          <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', marginBottom: 8, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+          <p style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', marginBottom: 4, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
             {label}
           </p>
           <p style={{
-            fontSize: 52, fontWeight: 900, color,
-            lineHeight: 1, marginBottom: sub ? 8 : 0,
+            fontSize: 48, fontWeight: 900, color,
+            lineHeight: 1, marginBottom: sub ? 5 : 0,
             letterSpacing: '-0.04em',
           }}>
             {value}
           </p>
           {sub && (
-            <p style={{ fontSize: 11, color: '#9ca3af', fontWeight: 500 }}>{sub}</p>
+            <p style={{ fontSize: 12, color: '#9ca3af', fontWeight: 500 }}>{sub}</p>
           )}
         </div>
         {Icon && (
           <div style={{
-            width: 40, height: 40, borderRadius: 12, background: `${accent}18`,
+            width: 38, height: 38, borderRadius: 10, background: `${accent}18`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             flexShrink: 0,
           }}>
@@ -508,7 +503,7 @@ export default function ExecutiveDashboard() {
 
       {/* ── 헤더 바 ── */}
       <div style={{
-        padding: '14px 28px',
+        padding: '10px 20px',
         background: 'white',
         borderBottom: '1px solid #e2e8f0',
         flexShrink: 0,
@@ -524,11 +519,11 @@ export default function ExecutiveDashboard() {
             <BarChart3 size={16} color="white" strokeWidth={2.5} />
           </div>
           <div>
-            <h1 style={{ fontSize: 15, fontWeight: 800, color: '#0f172a', margin: 0, letterSpacing: '-0.02em' }}>
-              임원 보고 대시보드
+            <h1 style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', margin: 0, letterSpacing: '-0.02em' }}>
+              대시보드
             </h1>
             {data && (
-              <p style={{ fontSize: 11, color: '#94a3b8', margin: 0, marginTop: 1 }}>
+              <p style={{ fontSize: 12, color: '#94a3b8', margin: 0, marginTop: 1 }}>
                 {data.sheetName}주차 · {now} 기준
               </p>
             )}
@@ -548,7 +543,7 @@ export default function ExecutiveDashboard() {
               className="rag-filter-btn"
               onClick={() => setFilterRag(btn.key)}
               style={{
-                fontSize: 11, fontWeight: 700, padding: '5px 12px', borderRadius: 20,
+                fontSize: 12, fontWeight: 700, padding: '5px 14px', borderRadius: 20,
                 border: 'none', cursor: 'pointer', letterSpacing: '0.02em',
                 background: filterRag === btn.key ? btn.activeBg : btn.bg,
                 color: filterRag === btn.key ? btn.activeColor : btn.color,
@@ -577,10 +572,10 @@ export default function ExecutiveDashboard() {
       )}
 
       {!loading && !error && data && (
-        <div style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 1200, width: '100%', margin: '0 auto' }}>
+        <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
 
           {/* ── 종합 현황 메트릭 카드 3개 ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
             <SummaryCard
               label="전체 프로젝트"
               value={total}
@@ -611,54 +606,54 @@ export default function ExecutiveDashboard() {
 
           {/* ── RAG 마스터 테이블 ── */}
           <div style={{
-            background: 'white', borderRadius: 16,
+            background: 'white', borderRadius: 12,
             border: '1px solid #e2e8f0',
-            boxShadow: '0 2px 16px rgba(0,0,0,0.06)',
+            boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
             overflow: 'hidden',
           }}>
             {/* 테이블 헤더 */}
             <div style={{
-              padding: '14px 20px',
+              padding: '10px 16px',
               borderBottom: '1px solid #f1f5f9',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             }}>
               <div>
-                <h2 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0, letterSpacing: '-0.01em' }}>
-                  프로젝트 RAG 현황 마스터 테이블
+                <h2 style={{ fontSize: 15, fontWeight: 800, color: '#0f172a', margin: 0, letterSpacing: '-0.01em' }}>
+                  프로젝트 RAG 현황
                 </h2>
-                <p style={{ fontSize: 11, color: '#94a3b8', margin: 0, marginTop: 2 }}>
-                  🔴 Red → 🟡 Amber → 🟢 Green 순 정렬 · 프로젝트명 클릭 시 상세 드로워 열림
+                <p style={{ fontSize: 12, color: '#94a3b8', margin: 0, marginTop: 1 }}>
+                  🔴 Red → 🟡 Amber → 🟢 Green 순 정렬 · 프로젝트명 클릭 → 상세 드로워
                 </p>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{
-                  fontSize: 11, color: '#94a3b8',
-                  background: '#f8fafc', padding: '4px 10px',
+                  fontSize: 12, color: '#94a3b8',
+                  background: '#f8fafc', padding: '3px 10px',
                   borderRadius: 6, border: '1px solid #e2e8f0',
                 }}>
-                  총 {filtered.length}건 표시 중
+                  총 {filtered.length}건
                 </span>
               </div>
             </div>
 
             {/* 테이블 */}
             <div className="exec-scroll" style={{ overflowX: 'auto' }}>
-              <table className="exec-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <table className="exec-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
                 <thead>
                   <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
                     {[
-                      { label: '프로젝트명', width: 160 },
-                      { label: '카테고리', width: 140 },
-                      { label: '현재 단계', width: 120 },
-                      { label: 'RAG 상태', width: 110 },
-                      { label: '이번 주 핵심 성과 / 리스크', width: 260 },
-                      { label: '비고 (의사결정 필요사항)', width: 220 },
+                      { label: '프로젝트명' },
+                      { label: '카테고리' },
+                      { label: '현재 단계' },
+                      { label: 'RAG 상태' },
+                      { label: '이번 주 핵심 성과 / 리스크' },
+                      { label: '비고 (의사결정 필요사항)' },
                     ].map(col => (
                       <th key={col.label} style={{
-                        textAlign: 'left', padding: '10px 16px',
-                        fontSize: 11, fontWeight: 700, color: '#475569',
-                        letterSpacing: '0.04em', textTransform: 'uppercase',
-                        whiteSpace: 'nowrap', width: col.width,
+                        textAlign: 'left', padding: '9px 14px',
+                        fontSize: 12, fontWeight: 700, color: '#475569',
+                        letterSpacing: '0.03em', textTransform: 'uppercase',
+                        whiteSpace: 'nowrap',
                       }}>
                         {col.label}
                       </th>
@@ -687,13 +682,13 @@ export default function ExecutiveDashboard() {
                         }}
                       >
                         {/* 프로젝트명 */}
-                        <td style={{ padding: '12px 16px' }}>
+                        <td style={{ padding: '11px 14px', whiteSpace: 'nowrap' }}>
                           <button
                             className="proj-link"
                             onClick={() => setDrawer(name)}
                             style={{
-                              display: 'flex', alignItems: 'center', gap: 6,
-                              color: '#1e40af', fontWeight: 800, fontSize: 13,
+                              display: 'flex', alignItems: 'center', gap: 5,
+                              color: '#1e40af', fontWeight: 800, fontSize: 14,
                               background: 'none', border: 'none', cursor: 'pointer',
                               padding: 0, textAlign: 'left',
                             }}
@@ -704,11 +699,11 @@ export default function ExecutiveDashboard() {
                         </td>
 
                         {/* 카테고리 */}
-                        <td style={{ padding: '12px 16px' }}>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                        <td style={{ padding: '11px 14px' }}>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
                             {cats.slice(0, 3).map(c => (
                               <span key={c} style={{
-                                fontSize: 10, background: '#f1f5f9', color: '#64748b',
+                                fontSize: 11, background: '#f1f5f9', color: '#64748b',
                                 padding: '2px 7px', borderRadius: 4, fontWeight: 600,
                               }}>
                                 {c}
@@ -718,17 +713,17 @@ export default function ExecutiveDashboard() {
                         </td>
 
                         {/* 현재 단계 */}
-                        <td style={{ padding: '12px 16px', minWidth: 110 }}>
+                        <td style={{ padding: '11px 14px' }}>
                           <InlineEdit
                             value={m.currentPhase || ''}
                             onChange={v => updateMeta(name, 'currentPhase', v)}
                             placeholder="단계 입력"
-                            style={{ fontSize: 12, color: '#374151' }}
+                            style={{ fontSize: 13, color: '#374151' }}
                           />
                         </td>
 
                         {/* RAG 상태 */}
-                        <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
+                        <td style={{ padding: '11px 14px', whiteSpace: 'nowrap' }}>
                           <RagBadge
                             status={m.ragStatus || 'GREEN'}
                             onChange={s => updateMeta(name, 'ragStatus', s)}
@@ -736,24 +731,24 @@ export default function ExecutiveDashboard() {
                         </td>
 
                         {/* 핵심 성과 / 리스크 */}
-                        <td style={{ padding: '12px 16px', maxWidth: 260 }}>
+                        <td style={{ padding: '11px 14px' }}>
                           <InlineEdit
                             value={m.executiveSummary || ''}
                             onChange={v => updateMeta(name, 'executiveSummary', v)}
                             placeholder="핵심 성과 또는 리스크 요약"
                             multiline
-                            style={{ fontSize: 12, color: '#374151', lineHeight: 1.55 }}
+                            style={{ fontSize: 13, color: '#374151', lineHeight: 1.55 }}
                           />
                         </td>
 
                         {/* 비고 */}
-                        <td style={{ padding: '12px 16px', maxWidth: 220 }}>
+                        <td style={{ padding: '11px 14px' }}>
                           <InlineEdit
                             value={m.helpNeeded || ''}
                             onChange={v => updateMeta(name, 'helpNeeded', v)}
                             placeholder="의사결정 필요사항"
                             multiline
-                            style={{ fontSize: 12, color: '#374151', lineHeight: 1.55 }}
+                            style={{ fontSize: 13, color: '#374151', lineHeight: 1.55 }}
                           />
                         </td>
                       </tr>
@@ -762,7 +757,7 @@ export default function ExecutiveDashboard() {
 
                   {filtered.length === 0 && (
                     <tr>
-                      <td colSpan={6} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8', fontSize: 13 }}>
+                      <td colSpan={6} style={{ textAlign: 'center', padding: '32px', color: '#94a3b8', fontSize: 14 }}>
                         해당 상태의 프로젝트가 없습니다.
                       </td>
                     </tr>
@@ -774,17 +769,17 @@ export default function ExecutiveDashboard() {
 
           {/* ── 하단 안내 ── */}
           <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16,
-            paddingBottom: 8,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20,
+            paddingBottom: 4,
           }}>
             {[
               { icon: '👆', text: '프로젝트명 클릭 → 상세 드로워 열기' },
               { icon: '🔄', text: 'RAG 배지 클릭 → 상태 순환' },
               { icon: '✏️', text: '셀 클릭 → 인라인 편집' },
-              { icon: '💾', text: '편집 내용 자동 저장' },
+              { icon: '💾', text: '자동 저장' },
             ].map(item => (
               <span key={item.text} style={{
-                fontSize: 11, color: '#94a3b8',
+                fontSize: 12, color: '#94a3b8',
                 display: 'flex', alignItems: 'center', gap: 4,
               }}>
                 {item.icon} {item.text}

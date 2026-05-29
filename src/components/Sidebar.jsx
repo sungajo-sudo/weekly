@@ -1,8 +1,8 @@
 import { Camera, Archive, Settings, BarChart3, PresentationIcon, LineChart } from 'lucide-react';
 
 const NAV_ITEMS = [
-  { id: 'slide', icon: Camera, label: '슬라이드 캡처 룸' },
-  { id: 'executive', icon: LineChart, label: '임원 보고 대시보드', badge: '보고용' },
+  { id: 'executive', icon: LineChart, label: '대시보드' },
+  { id: 'slide', icon: Camera, label: '상세 업무 진행' },
   { id: 'archive', icon: Archive, label: '연간 업무 아카이브' },
   { id: 'settings', icon: Settings, label: '데이터 동기화 설정' },
 ];
@@ -22,7 +22,7 @@ export default function Sidebar({ current, onChange }) {
         </div>
       </div>
       <nav className="flex-1 px-3 py-3 space-y-0.5">
-        {NAV_ITEMS.map(({ id, icon: Icon, label, badge }) => (
+        {NAV_ITEMS.map(({ id, icon: Icon, label }) => (
           <button
             key={id}
             onClick={() => onChange(id)}
@@ -33,16 +33,6 @@ export default function Sidebar({ current, onChange }) {
           >
             <Icon size={16} />
             <span className="flex-1 truncate">{label}</span>
-            {badge && (
-              <span style={{
-                fontSize: 9, fontWeight: 800, padding: '1px 5px',
-                borderRadius: 4, letterSpacing: '0.04em',
-                background: current === id ? '#4f46e5' : '#e0e7ff',
-                color: current === id ? 'white' : '#4f46e5',
-              }}>
-                {badge}
-              </span>
-            )}
           </button>
         ))}
       </nav>
