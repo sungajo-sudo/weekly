@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, ChevronRight, AlertTriangle, CheckCircle2, BarChart3, GripVertical, Clock } from 'lucide-react';
+import { X, ChevronRight, AlertTriangle, CheckCircle2, BarChart3, GripVertical, Clock, Infinity } from 'lucide-react';
 import { useWeeklyData } from '../hooks/useWeeklyData';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
@@ -155,9 +155,9 @@ function SummaryCell({ projectName, data, manualValue, onChange }) {
 }
 
 /* ─────────────────────────────────────────────
-   진행률 프로그레스바
+   진행률 프로그레스바 (상시 진행 지원)
 ───────────────────────────────────────────── */
-function ProgressBar({ value, onChange }) {
+function ProgressBar({ value, continuous, onChange, onContinuousChange }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(String(value || 0));
   const ref = useRef(null);
@@ -169,6 +169,39 @@ function ProgressBar({ value, onChange }) {
     const v = Math.min(100, Math.max(0, parseInt(draft) || 0));
     onChange(v); setEditing(false);
   }
+  function toggleContinuous(e) {
+    e.stopPropagation();
+    onContinuousChange(!continuous);
+  }
+
+  /* 상시 진행 모드 */
+  if (continuous) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 110 }}>
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: 5,
+          background: '#e0f2fe', border: '1.5px solid #7dd3fc',
+          borderRadius: 20, padding: '4px 10px',
+        }}>
+          <Infinity size={14} color="#0284c7" strokeWidth={2.5} />
+          <span style={{ fontSize: 13, fontWeight: 800, color: '#0369a1', whiteSpace: 'nowrap' }}>상시 진행</span>
+        </div>
+        <button
+          title="수치 입력으로 전환"
+          onClick={toggleContinuous}
+          style={{
+            border: 'none', background: 'none', cursor: 'pointer', padding: 0,
+            color: '#94a3b8', display: 'flex', alignItems: 'center',
+          }}
+          onMouseEnter={e => e.currentTarget.style.color = '#475569'}
+          onMouseLeave={e => e.currentTarget.style.color = '#94a3b8'}
+        >
+          <span style={{ fontSize: 11 }}>%</span>
+        </button>
+      </div>
+    );
+  }
+
   if (editing) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -188,12 +221,30 @@ function ProgressBar({ value, onChange }) {
     );
   }
   return (
-    <div style={{ cursor: 'pointer', minWidth: 110, width: '100%' }} onClick={() => { setDraft(String(pct)); setEditing(true); }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <div style={{ flex: 1, height: 8, background: '#e2e8f0', borderRadius: 4, overflow: 'hidden', minWidth: 60 }}>
+    <div style={{ minWidth: 130, width: '100%' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div
+          style={{ flex: 1, height: 8, background: '#e2e8f0', borderRadius: 4, overflow: 'hidden', minWidth: 60, cursor: 'pointer' }}
+          onClick={() => { setDraft(String(pct)); setEditing(true); }}
+        >
           <div style={{ width: `${pct}%`, height: '100%', background: `linear-gradient(90deg, ${barColor}bb, ${barColor})`, borderRadius: 4, transition: 'width 0.45s cubic-bezier(0.4,0,0.2,1)' }} />
         </div>
-        <span style={{ fontSize: 15, fontWeight: 800, color: textColor, minWidth: 36, textAlign: 'right' }}>{pct}%</span>
+        <span
+          style={{ fontSize: 15, fontWeight: 800, color: textColor, minWidth: 36, textAlign: 'right', cursor: 'pointer' }}
+          onClick={() => { setDraft(String(pct)); setEditing(true); }}
+        >{pct}%</span>
+        <button
+          title="상시 진행으로 전환"
+          onClick={toggleContinuous}
+          style={{
+            border: 'none', background: 'none', cursor: 'pointer', padding: '1px 2px',
+            color: '#d1d5db', display: 'flex', alignItems: 'center', flexShrink: 0,
+          }}
+          onMouseEnter={e => e.currentTarget.style.color = '#0284c7'}
+          onMouseLeave={e => e.currentTarget.style.color = '#d1d5db'}
+        >
+          <Infinity size={13} strokeWidth={2} />
+        </button>
       </div>
     </div>
   );
@@ -303,7 +354,12 @@ function SideDrawer({ project, meta, data, onClose, onMetaChange }) {
           <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
             <StatusBadge status={meta.ragStatus || 'GREEN'} onChange={s => onMetaChange('ragStatus', s)} />
             <div style={{ flex: 1, minWidth: 150 }}>
-              <ProgressBar value={meta.progress || 0} onChange={v => onMetaChange('progress', v)} />
+              <ProgressBar
+                value={meta.progress || 0}
+                continuous={meta.continuous || false}
+                onChange={v => onMetaChange('progress', v)}
+                onContinuousChange={v => onMetaChange('continuous', v)}
+              />
             </div>
           </div>
         </div>
@@ -457,8 +513,13 @@ function SortableRow({ name, meta, data, cfg, isIssue, cats, onOpenDrawer, onUpd
       </td>
 
       {/* 진행률 */}
-      <td style={{ padding: '13px 14px', minWidth: 135 }}>
-        <ProgressBar value={meta.progress || 0} onChange={v => onUpdateMeta(name, 'progress', v)} />
+      <td style={{ padding: '13px 14px', minWidth: 155 }}>
+        <ProgressBar
+          value={meta.progress || 0}
+          continuous={meta.continuous || false}
+          onChange={v => onUpdateMeta(name, 'progress', v)}
+          onContinuousChange={v => onUpdateMeta(name, 'continuous', v)}
+        />
       </td>
 
       {/* 진행 상태 */}
@@ -476,7 +537,7 @@ function SortableRow({ name, meta, data, cfg, isIssue, cats, onOpenDrawer, onUpd
       </td>
 
       {/* 이슈 / 요청 */}
-      <td style={{ padding: '13px 14px' }}>
+      <td style={{ padding: '13px 14px', minWidth: 220 }}>
         <InlineEdit
           value={meta.helpNeeded || ''}
           onChange={v => onUpdateMeta(name, 'helpNeeded', v)}
@@ -517,7 +578,7 @@ export default function ExecutiveDashboard() {
   }
 
   function getProjectMeta(name) {
-    return meta[name] || { ragStatus: 'GREEN', progress: 0, executiveSummary: '', helpNeeded: '' };
+    return meta[name] || { ragStatus: 'GREEN', progress: 0, continuous: false, executiveSummary: '', helpNeeded: '' };
   }
 
   const ragSorted = [...projects].sort((a, b) =>
