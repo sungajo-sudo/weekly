@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import cron from 'node-cron';
-import { fetchSheetData, getSheetNameByGid, fetchRows } from './sheets.js';
+import { fetchRows, getLatestSheetName } from './sheets.js';
 import { parseWeeklySheet } from './parser.js';
 
 const app = express();
@@ -14,8 +14,8 @@ let cache = { weekly: null, lastSync: null, error: null, sheetName: null };
 
 async function syncFromSheet() {
   try {
-    const sheetName = await getSheetNameByGid(process.env.SHEET_GID);
-    if (!sheetName) throw new Error(`Sheet GID ${process.env.SHEET_GID} not found`);
+    const sheetName = await getLatestSheetName();
+    if (!sheetName) throw new Error('최신 시트를 찾을 수 없습니다');
 
     const rawRows = await fetchRows(`${sheetName}!A:G`);
     const members = parseWeeklySheet(rawRows);

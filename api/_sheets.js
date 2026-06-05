@@ -13,14 +13,50 @@ export function getSheets() {
   return google.sheets({ version: 'v4', auth });
 }
 
-// 숨겨지지 않은 시트 중 가장 왼쪽(첫 번째 visible) 시트 이름 반환
+// 날짜 파싱 헬퍼: "M/D", "MM/DD", "M월D일" 등 다양한 형식 지원 → Date 반환 (올해 기준)
+function parseSheetDate(title) {
+  const year = new Date().getFullYear();
+  // 패턴 1: 5/6, 05/06, 5/13 형식
+  const slash = title.match(/^(\d{1,2})\/(\d{1,2})$/);
+  if (slash) {
+    const m = parseInt(slash[1], 10);
+    const d = parseInt(slash[2], 10);
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) return new Date(year, m - 1, d);
+  }
+  // 패턴 2: 5월6일, 5월 6일 형식
+  const korean = title.match(/(\d{1,2})월\s*(\d{1,2})일/);
+  if (korean) {
+    const m = parseInt(korean[1], 10);
+    const d = parseInt(korean[2], 10);
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) return new Date(year, m - 1, d);
+  }
+  // 패턴 3: YYYY-MM-DD, YYYY/MM/DD 형식
+  const iso = title.match(/(\d{4})[\-/](\d{1,2})[\-/](\d{1,2})/);
+  if (iso) return new Date(parseInt(iso[1]), parseInt(iso[2]) - 1, parseInt(iso[3]));
+  return null;
+}
+
+// 숨겨지지 않은 시트 중 가장 최신 날짜 시트 이름 반환
+// (날짜 파싱 불가 시 마지막 visible 시트로 폴백)
 export async function getFirstSheetName() {
   const sheets = getSheets();
   const meta = await sheets.spreadsheets.get({
     spreadsheetId: process.env.SPREADSHEET_ID,
   });
-  const visible = meta.data.sheets.find(s => !s.properties.hidden);
-  return visible?.properties?.title || null;
+  const visibleSheets = meta.data.sheets.filter(s => !s.properties.hidden);
+  if (!visibleSheets.length) return null;
+
+  // 날짜 파싱 가능한 시트들을 날짜 기준 내림차순 정렬
+  const dated = visibleSheets
+    .map(s => ({ title: s.properties.title, date: parseSheetDate(s.properties.title) }))
+    .filter(s => s.date !== null)
+    .sort((a, b) => b.date - a.date);
+
+  // 가장 최신 날짜 시트 반환 (없으면 마지막 visible 시트)
+  const latest = dated[0]?.title || visibleSheets[visibleSheets.length - 1]?.properties?.title || null;
+  console.log('[sheets] visible sheets:', visibleSheets.map(s => s.properties.title));
+  console.log('[sheets] latest sheet selected:', latest);
+  return latest;
 }
 
 export async function fetchRows(sheetName) {

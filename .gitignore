@@ -30,3 +30,4 @@ backend/*.json
 *.sln
 *.sw?
 weeklyreport-serviceplanning-9151941c3e71.json 
+.vercel
