@@ -36,8 +36,8 @@ function parseSheetDate(title) {
   return null;
 }
 
-// 숨겨지지 않은 시트 중 가장 최신 날짜 시트 이름 반환
-// (날짜 파싱 불가 시 마지막 visible 시트로 폴백)
+// 숨겨지지 않은 시트 중 날짜가 가장 최신(= 다음 보고 미팅) 시트 이름 반환
+// 시트 이름은 보고 미팅 날짜 기준 (예: 6/8 = 6월 8일 미팅)
 export async function getFirstSheetName() {
   const sheets = getSheets();
   const meta = await sheets.spreadsheets.get({
@@ -46,14 +46,12 @@ export async function getFirstSheetName() {
   const visibleSheets = meta.data.sheets.filter(s => !s.properties.hidden);
   if (!visibleSheets.length) return null;
 
-  // 날짜 파싱 가능한 시트들을 날짜 기준 내림차순 정렬
   const dated = visibleSheets
     .map(s => ({ title: s.properties.title, date: parseSheetDate(s.properties.title) }))
     .filter(s => s.date !== null)
-    .sort((a, b) => b.date - a.date);
+    .sort((a, b) => b.date - a.date); // 내림차순: 가장 최신 날짜 먼저
 
-  // 가장 최신 날짜 시트 반환 (없으면 마지막 visible 시트)
-  const latest = dated[0]?.title || visibleSheets[visibleSheets.length - 1]?.properties?.title || null;
+  const latest = dated[0]?.title || visibleSheets[0]?.properties?.title || null;
   console.log('[sheets] visible sheets:', visibleSheets.map(s => s.properties.title));
   console.log('[sheets] latest sheet selected:', latest);
   return latest;
