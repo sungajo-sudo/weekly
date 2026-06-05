@@ -42,10 +42,22 @@ const STATUS_CYCLE = ['RED', 'AMBER', 'GREEN'];
 const STORAGE_KEY  = 'exec-dashboard-meta-v2';
 const ORDER_KEY    = 'exec-dashboard-order';
 
-function loadMeta()   { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch { return {}; } }
-function saveMeta(m)  { localStorage.setItem(STORAGE_KEY, JSON.stringify(m)); }
-function loadOrder()  { try { return JSON.parse(localStorage.getItem(ORDER_KEY) || 'null'); } catch { return null; } }
-function saveOrder(o) { localStorage.setItem(ORDER_KEY, JSON.stringify(o)); }
+function loadMeta(sheetName)   {
+  if (!sheetName) return {};
+  try { return JSON.parse(localStorage.getItem(`${STORAGE_KEY}-${sheetName}`) || '{}'); } catch { return {}; }
+}
+function saveMeta(sheetName, m)  {
+  if (!sheetName) return;
+  localStorage.setItem(`${STORAGE_KEY}-${sheetName}`, JSON.stringify(m));
+}
+function loadOrder(sheetName)  {
+  if (!sheetName) return null;
+  try { return JSON.parse(localStorage.getItem(`${ORDER_KEY}-${sheetName}`) || 'null'); } catch { return null; }
+}
+function saveOrder(sheetName, o) {
+  if (!sheetName) return;
+  localStorage.setItem(`${ORDER_KEY}-${sheetName}`, JSON.stringify(o));
+}
 
 function stripHtml(html) {
   return (html || '').replace(/<[^>]+>/g, '').trim();
@@ -555,10 +567,17 @@ function SortableRow({ name, meta, data, cfg, isIssue, cats, onOpenDrawer, onUpd
 ───────────────────────────────────────────── */
 export default function ExecutiveDashboard() {
   const { data, loading, error } = useWeeklyData();
-  const [meta, setMeta]     = useState(loadMeta);
+  const [meta, setMeta]     = useState({});
   const [drawer, setDrawer] = useState(null);
   const [filter, setFilter] = useState('ALL');
-  const [customOrder, setCustomOrder] = useState(loadOrder);
+  const [customOrder, setCustomOrder] = useState(null);
+
+  useEffect(() => {
+    if (data?.sheetName) {
+      setMeta(loadMeta(data.sheetName));
+      setCustomOrder(loadOrder(data.sheetName));
+    }
+  }, [data?.sheetName]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -570,9 +589,10 @@ export default function ExecutiveDashboard() {
   )] : [];
 
   function updateMeta(project, field, value) {
+    if (!data?.sheetName) return;
     setMeta(prev => {
       const next = { ...prev, [project]: { ...prev[project], [field]: value } };
-      saveMeta(next);
+      saveMeta(data.sheetName, next);
       return next;
     });
   }
@@ -609,12 +629,16 @@ export default function ExecutiveDashboard() {
     const otherProjects = orderedProjects.filter(p => !filtered.includes(p));
     const newOrder = filter === 'ALL' ? newFiltered : [...newFiltered, ...otherProjects];
     setCustomOrder(newOrder);
-    saveOrder(newOrder);
+    if (data?.sheetName) {
+      saveOrder(data.sheetName, newOrder);
+    }
   }
 
   function resetOrder() {
     setCustomOrder(null);
-    localStorage.removeItem(ORDER_KEY);
+    if (data?.sheetName) {
+      localStorage.removeItem(`${ORDER_KEY}-${data.sheetName}`);
+    }
   }
 
   return (

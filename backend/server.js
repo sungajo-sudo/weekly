@@ -17,7 +17,7 @@ async function syncFromSheet() {
     const sheetName = await getLatestSheetName();
     if (!sheetName) throw new Error('최신 시트를 찾을 수 없습니다');
 
-    const rawRows = await fetchRows(`${sheetName}!A:G`);
+    const rawRows = await fetchRows(`${sheetName}!A:I`);
     const members = parseWeeklySheet(rawRows);
 
     cache = { weekly: members, sheetName, lastSync: new Date().toISOString(), error: null };
